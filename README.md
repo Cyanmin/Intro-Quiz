@@ -4,7 +4,14 @@
 
 ## プロジェクト構成
 
-- `frontend/` - Viteで構築されたReactアプリ。`frontend/README.md` にディレクトリ構成をまとめています。
+- `features/` - Feature specific components such as room or quiz modules.
+- `components/` - Reusable UI components like buttons and inputs.
+- `pages/` - Components used as routing pages.
+- `hooks/` - Reusable React hooks.
+- `services/` - API and WebSocket communication utilities.
+- `stores/` - Global state management stores using Zustand.
+- `utils/` - Generic utility functions.
+- `routes/` - React Router configuration.
 - `backend/` - GinとGorilla WebSocketで実装されたGoサーバー。
 
 ### backend ディレクトリ構成
