@@ -10,6 +10,7 @@ COPY cmd/intro-quiz ./cmd/intro-quiz
 COPY internal ./internal
 COPY pkg ./pkg
 COPY config ./config
+COPY docs ./docs
 RUN go build -o server ./cmd/intro-quiz
 
 # Run stage
