@@ -17,6 +17,7 @@ type Client struct {
 	Conn    *websocket.Conn
 	Service MessageService
 	Send    chan OutgoingMessage
+	RoomID  string
 }
 
 // MessageService defines processing behavior for incoming messages.
@@ -24,16 +25,19 @@ type MessageService interface {
 	ProcessMessage(messageType int, message []byte) (int, []byte)
 }
 
-// NewClient creates a Client bound to the given service.
-func NewClient(conn *websocket.Conn, svc MessageService) *Client {
+// NewClient creates a Client bound to the given service and room.
+func NewClient(conn *websocket.Conn, roomID string, svc MessageService) *Client {
 	return &Client{
 		Conn:    conn,
 		Service: svc,
 		Send:    make(chan OutgoingMessage, 8),
+		RoomID:  roomID,
 	}
 }
 
 // Listen reads messages from the WebSocket and sends back the processed result.
+// When ReadMessage or WriteMessage returns an error, the error is logged along
+// with the room ID and remote address. The connection then closes.
 func (c *Client) Listen() {
 	defer c.Conn.Close()
 
@@ -42,7 +46,7 @@ func (c *Client) Listen() {
 	go func() {
 		for msg := range c.Send {
 			if err := c.Conn.WriteMessage(msg.Type, msg.Data); err != nil {
-				log.Printf("write: %v", err)
+				log.Printf("write error room:%s addr:%s err:%v", c.RoomID, c.Conn.RemoteAddr(), err)
 				break
 			}
 		}
@@ -52,7 +56,7 @@ func (c *Client) Listen() {
 	for {
 		mt, msg, err := c.Conn.ReadMessage()
 		if err != nil {
-			log.Printf("read: %v", err)
+			log.Printf("read error room:%s addr:%s err:%v", c.RoomID, c.Conn.RemoteAddr(), err)
 			break
 		}
 		log.Printf("recv: %s", msg)
