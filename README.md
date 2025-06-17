@@ -47,3 +47,11 @@ docker build -t intro-quiz-backend ./backend
 docker run -p 8080:8080 intro-quiz-backend
 ```
 
+### docker-compose を使った起動
+
+`docker-compose.yml` が用意されているため、ルートディレクトリで次のコマンドを実行するだけでフロントエンドとバックエンドの両方を起動できます。
+
+```bash
+docker-compose up --build
+```
+
