@@ -51,6 +51,10 @@ go run ./cmd/intro-quiz
 
 サーバーは `http://localhost:8080` で待ち受けます。
 
+バックエンドを起動する前に `backend/.env.example` を `backend/.env` にコピーし、
+`YOUTUBE_API_KEY` などの値を適切に設定してください。`docker-compose.yml` も
+このファイルを利用します。
+
 ### Docker での実行
 
 それぞれのディレクトリで以下を実行してイメージをビルドし、コンテナを起動できます。
