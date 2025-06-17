@@ -1,21 +1,21 @@
-import { useState } from 'react'
+import { useState } from "react";
 
 export default function RoomJoinForm({ onJoin }) {
-  const [name, setName] = useState('')
+  const [roomId, setRoomId] = useState("");
 
   const submit = (e) => {
-    e.preventDefault()
-    onJoin(name)
-  }
+    e.preventDefault();
+    onJoin(roomId);
+  };
 
   return (
     <form onSubmit={submit}>
       <input
-        placeholder="Enter name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
+        placeholder="ルームIDを入力してください"
+        value={roomId}
+        onChange={(e) => setRoomId(e.target.value)}
       />
-      <button type="submit">Join</button>
+      <button type="submit">参加</button>
     </form>
-  )
+  );
 }

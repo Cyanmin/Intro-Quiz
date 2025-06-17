@@ -1,23 +1,25 @@
-import { useState } from 'react'
-import RoomJoinForm from '../features/room/RoomJoinForm'
-import { useRoomStore } from '../stores/roomStore'
-import useWebSocket from '../hooks/useWebSocket'
-import { WS_URL } from '../services/websocket'
+import { useState } from "react";
+import RoomJoinForm from "../features/room/RoomJoinForm";
+import { useRoomStore } from "../stores/roomStore";
+import useWebSocket from "../hooks/useWebSocket";
+import { WS_URL } from "../services/websocket";
 
 export default function RoomPage() {
-  const addMessage = useRoomStore((state) => state.addMessage)
-  const messages = useRoomStore((state) => state.messages)
-  const [joined, setJoined] = useState(false)
-  const { connect, send } = useWebSocket(WS_URL)
+  const addMessage = useRoomStore((state) => state.addMessage);
+  const clearMessages = useRoomStore((state) => state.clearMessages);
+  const messages = useRoomStore((state) => state.messages);
+  const [joined, setJoined] = useState(false);
+  const { connect, send } = useWebSocket(WS_URL);
 
-  const handleJoin = () => {
-    connect((event) => addMessage(event.data))
-    setJoined(true)
-  }
+  const handleJoin = (roomId) => {
+    clearMessages();
+    connect(roomId, (event) => addMessage(event.data));
+    setJoined(true);
+  };
 
   const sendTest = () => {
-    send('test')
-  }
+    send("test");
+  };
 
   return (
     <div>
@@ -34,5 +36,5 @@ export default function RoomPage() {
         <RoomJoinForm onJoin={handleJoin} />
       )}
     </div>
-  )
+  );
 }
