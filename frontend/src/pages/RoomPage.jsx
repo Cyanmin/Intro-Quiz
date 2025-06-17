@@ -15,6 +15,8 @@ export default function RoomPage() {
   const messages = useRoomStore((state) => state.messages);
   const readyStates = useRoomStore((state) => state.readyStates);
   const setReadyStates = useRoomStore((state) => state.setReadyStates);
+  const setCurrentVideoId = useRoomStore((state) => state.setCurrentVideoId);
+  const currentVideoId = useRoomStore((state) => state.currentVideoId);
   const [joined, setJoined] = useState(false);
   const [name, setName] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -36,6 +38,7 @@ export default function RoomPage() {
           setQuestionActive(true);
           setWinner(null);
           setPauseInfo("");
+          setCurrentVideoId(data.videoId);
           setPlaying(true);
           setTimeLeft(10);
           if (timerRef.current) clearInterval(timerRef.current);
@@ -96,9 +99,9 @@ export default function RoomPage() {
               {u}さん：{r ? "準備完了" : "未準備"}
             </p>
           ))}
-          {playing && <p>再生中…</p>}
+          {playing && <p>問題を再生中…</p>}
           {pauseInfo && <p>{pauseInfo}</p>}
-          <YouTubePlayer videoId="M7lc1UVf-VE" playing={playing} />
+          <YouTubePlayer videoId={currentVideoId} playing={playing} />
           {questionActive && (
             <div>
               <p>制限時間: {timeLeft}秒</p>
