@@ -6,8 +6,11 @@ WORKDIR /app
 COPY go.mod .
 COPY go.sum .
 RUN go mod download
-COPY main.go .
-RUN go build -o server
+COPY cmd/intro-quiz ./cmd/intro-quiz
+COPY internal ./internal
+COPY pkg ./pkg
+COPY config ./config
+RUN go build -o server ./cmd/intro-quiz
 
 # Run stage
 FROM gcr.io/distroless/static
