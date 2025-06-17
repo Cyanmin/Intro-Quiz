@@ -15,7 +15,12 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// WSHandler upgrades the connection and starts the WebSocket client.
+// WSHandler upgrades the HTTP request to a WebSocket connection.
+// @Summary      WebSocket endpoint
+// @Description  Upgrade the request and start echoing messages over WebSocket.
+// @Tags         websocket
+// @Success      101 {string} string "Switching Protocols"
+// @Router       /ws [get]
 func WSHandler(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {

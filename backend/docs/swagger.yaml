@@ -20,4 +20,36 @@ paths:
       summary: Say hello
       tags:
       - example
+  /api/youtube/test:
+    get:
+      description: Retrieve the first video's title from a fixed YouTube playlist.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get first video title
+      tags:
+      - youtube
+  /ws:
+    get:
+      description: Upgrade the request and start echoing messages over WebSocket.
+      responses:
+        "101":
+          description: Switching Protocols
+          schema:
+            type: string
+      summary: WebSocket endpoint
+      tags:
+      - websocket
 swagger: "2.0"
