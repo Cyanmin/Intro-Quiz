@@ -1,10 +1,10 @@
-# Intro Quiz
+# イントロクイズ
 
-This repository contains a minimal starter for an online Intro Quiz application.
+このリポジトリは、オンラインイントロクイズアプリケーションの最小スターターです。
 
-## Project Structure
+## プロジェクト構成
 
-- `frontend/` - React app built with Vite.
-- `backend/` - Go WebSocket server using Gorilla.
+- `frontend/` - Viteで構築されたReactアプリ。
+- `backend/` - Gorillaを使用したGoのWebSocketサーバー。
 
-Each directory includes a Dockerfile for building a container image.
+各ディレクトリには、コンテナイメージをビルドするためのDockerfileが含まれています。
