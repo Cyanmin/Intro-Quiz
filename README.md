@@ -47,6 +47,9 @@ docker build -t intro-quiz-backend ./backend
 docker run -p 8080:8080 intro-quiz-backend
 ```
 
+バックエンドイメージは静的リンクされたバイナリを生成するため、追加のライブラリを必要としません。
+これは GLIBC のバージョン違いによる起動失敗を防ぐためです。
+
 ### docker-compose を使った起動
 
 `docker-compose.yml` が用意されているため、ルートディレクトリで次のコマンドを実行するだけでフロントエンドとバックエンドの両方を起動できます。
