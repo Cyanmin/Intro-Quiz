@@ -6,8 +6,8 @@ export default function YouTubePlayer({ videoId, playing, onPause }) {
   const [ready, setReady] = useState(false);
 
   const opts = {
-    width: "640",
-    height: "360",
+    width: "0", // hide width
+    height: "0", // hide height
     playerVars: {
       modestbranding: 1,
       rel: 0,
@@ -29,5 +29,12 @@ export default function YouTubePlayer({ videoId, playing, onPause }) {
     }
   }, [playing, ready]);
 
-  return <YouTube videoId={videoId} opts={opts} onReady={onReady} />;
+  return (
+    <YouTube
+      videoId={videoId}
+      opts={opts}
+      onReady={onReady}
+      style={{ display: "none" }}
+    />
+  );
 }
