@@ -1,0 +1,14 @@
+package model
+
+// ClientMessage represents a message received from the client.
+type ClientMessage struct {
+	Type string `json:"type"`
+	User string `json:"user,omitempty"`
+}
+
+// ServerMessage represents a message sent to clients.
+type ServerMessage struct {
+	Type      string `json:"type"`
+	User      string `json:"user,omitempty"`
+	Timestamp int64  `json:"timestamp"`
+}
