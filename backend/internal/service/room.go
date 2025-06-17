@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"intro-quiz/backend/internal/model"
+	"intro-quiz/backend/pkg/ws"
 )
 
 // RoomManager manages WebSocket connections grouped by room ID.
@@ -15,13 +16,13 @@ type RoomState struct {
 	Fastest string
 	Active  bool
 	Ready   map[string]bool
-	Users   map[*websocket.Conn]string
+	Users   map[*ws.Client]string
 	VideoID string
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
 type RoomManager struct {
-	rooms  map[string]map[*websocket.Conn]bool
+	rooms  map[string]map[*ws.Client]bool
 	states map[string]*RoomState
 	mu     sync.RWMutex
 }
@@ -38,34 +39,34 @@ func copyReady(src map[string]bool) map[string]bool {
 // NewRoomManager creates a new RoomManager.
 func NewRoomManager() *RoomManager {
 	return &RoomManager{
-		rooms:  make(map[string]map[*websocket.Conn]bool),
+		rooms:  make(map[string]map[*ws.Client]bool),
 		states: make(map[string]*RoomState),
 	}
 }
 
 // Join adds a connection to a room.
-func (m *RoomManager) Join(roomID string, conn *websocket.Conn) {
+func (m *RoomManager) Join(roomID string, client *ws.Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.rooms[roomID]; !ok {
-		m.rooms[roomID] = make(map[*websocket.Conn]bool)
+		m.rooms[roomID] = make(map[*ws.Client]bool)
 	}
-	m.rooms[roomID][conn] = true
+	m.rooms[roomID][client] = true
 	if _, ok := m.states[roomID]; !ok {
-		m.states[roomID] = &RoomState{Ready: make(map[string]bool), Users: make(map[*websocket.Conn]string)}
+		m.states[roomID] = &RoomState{Ready: make(map[string]bool), Users: make(map[*ws.Client]string)}
 	}
 }
 
 // RegisterUser stores the user's name for a connection and returns current ready states.
-func (m *RoomManager) RegisterUser(roomID string, conn *websocket.Conn, name string) map[string]bool {
+func (m *RoomManager) RegisterUser(roomID string, client *ws.Client, name string) map[string]bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	st := m.states[roomID]
 	if st == nil {
-		st = &RoomState{Ready: make(map[string]bool), Users: make(map[*websocket.Conn]string)}
+		st = &RoomState{Ready: make(map[string]bool), Users: make(map[*ws.Client]string)}
 		m.states[roomID] = st
 	}
-	st.Users[conn] = name
+	st.Users[client] = name
 	if _, ok := st.Ready[name]; !ok {
 		st.Ready[name] = false
 	}
@@ -92,14 +93,14 @@ func (m *RoomManager) SetReady(roomID, name string) (bool, map[string]bool) {
 }
 
 // Leave removes a connection from a room.
-func (m *RoomManager) Leave(roomID string, conn *websocket.Conn) {
+func (m *RoomManager) Leave(roomID string, client *ws.Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if clients, ok := m.rooms[roomID]; ok {
-		delete(clients, conn)
+		delete(clients, client)
 		if st, ok := m.states[roomID]; ok {
-			if name, exists := st.Users[conn]; exists {
-				delete(st.Users, conn)
+			if name, exists := st.Users[client]; exists {
+				delete(st.Users, client)
 				delete(st.Ready, name)
 			}
 		}
@@ -111,16 +112,16 @@ func (m *RoomManager) Leave(roomID string, conn *websocket.Conn) {
 }
 
 // Broadcast sends a message to all clients in the room except the sender.
-func (m *RoomManager) Broadcast(roomID string, sender *websocket.Conn, mt int, msg []byte) {
+func (m *RoomManager) Broadcast(roomID string, sender *ws.Client, mt int, msg []byte) {
 	m.mu.RLock()
 	clients := m.rooms[roomID]
 	m.mu.RUnlock()
 
-	for conn := range clients {
-		if conn == sender {
+	for c := range clients {
+		if c == sender {
 			continue
 		}
-		conn.WriteMessage(mt, msg) // ignore errors for simplicity
+		c.Send <- ws.OutgoingMessage{Type: mt, Data: msg}
 	}
 }
 
@@ -180,14 +181,14 @@ func (m *RoomManager) IsActive(roomID string) bool {
 type RoomService struct {
 	manager    *RoomManager
 	roomID     string
-	conn       *websocket.Conn
+	client     *ws.Client
 	yt         *YouTubeService
 	playlistID string
 }
 
 // NewRoomService creates a RoomService for a specific connection and room.
-func NewRoomService(m *RoomManager, roomID string, conn *websocket.Conn, yt *YouTubeService, playlistID string) *RoomService {
-	return &RoomService{manager: m, roomID: roomID, conn: conn, yt: yt, playlistID: playlistID}
+func NewRoomService(m *RoomManager, roomID string, client *ws.Client, yt *YouTubeService, playlistID string) *RoomService {
+	return &RoomService{manager: m, roomID: roomID, client: client, yt: yt, playlistID: playlistID}
 }
 
 // ProcessMessage broadcasts the received message to the room.
@@ -199,15 +200,15 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 
 	switch req.Type {
 	case "join":
-		states := r.manager.RegisterUser(r.roomID, r.conn, req.User)
+		states := r.manager.RegisterUser(r.roomID, r.client, req.User)
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
-		r.conn.WriteMessage(websocket.TextMessage, resp)
-		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
+		r.client.Send <- ws.OutgoingMessage{Type: websocket.TextMessage, Data: resp}
+		r.manager.Broadcast(r.roomID, r.client, websocket.TextMessage, resp)
 	case "ready":
 		all, states := r.manager.SetReady(r.roomID, req.User)
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
-		r.conn.WriteMessage(websocket.TextMessage, resp)
-		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
+		r.client.Send <- ws.OutgoingMessage{Type: websocket.TextMessage, Data: resp}
+		r.manager.Broadcast(r.roomID, r.client, websocket.TextMessage, resp)
 		if all {
 			videoID, err := r.yt.GetRandomVideoID(r.playlistID)
 			if err != nil {
@@ -228,7 +229,7 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 	case "buzz":
 		// broadcast that someone pressed the answer button
 		note, _ := json.Marshal(&model.ServerMessage{Type: "answer", User: req.User, Timestamp: time.Now().UnixMilli()})
-		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, note)
+		r.manager.Broadcast(r.roomID, r.client, websocket.TextMessage, note)
 
 		if r.manager.SetFastest(r.roomID, req.User) {
 			resp, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: req.User, Timestamp: time.Now().UnixMilli()})

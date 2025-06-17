@@ -36,11 +36,11 @@ func WSHandler(c *gin.Context) {
 		log.Printf("upgrade: %v", err)
 		return
 	}
-	roomManager.Join(roomID, conn)
-	defer roomManager.Leave(roomID, conn)
-
-	svc := service.NewRoomService(roomManager, roomID, conn, youtubeService, playlistID)
-	client := ws.NewClient(conn, svc)
+	client := ws.NewClient(conn, nil)
+	svc := service.NewRoomService(roomManager, roomID, client, youtubeService, playlistID)
+	client.Service = svc
+	roomManager.Join(roomID, client)
+	defer roomManager.Leave(roomID, client)
 	log.Printf("client connected: %s room:%s", conn.RemoteAddr(), roomID)
 	client.Listen()
 	log.Printf("client disconnected: %s room:%s", conn.RemoteAddr(), roomID)
