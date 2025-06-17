@@ -1,0 +1,23 @@
+basePath: /
+info:
+  contact: {}
+  description: This is the REST API for the Intro Quiz backend.
+  title: Intro Quiz API
+  version: "1.0"
+paths:
+  /api/hello:
+    get:
+      description: Responds with a simple greeting.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Say hello
+      tags:
+      - example
+swagger: "2.0"
