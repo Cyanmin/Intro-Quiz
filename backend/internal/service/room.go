@@ -14,6 +14,8 @@ import (
 type RoomState struct {
 	Fastest string
 	Active  bool
+	Ready   map[string]bool
+	Users   map[*websocket.Conn]string
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
@@ -21,6 +23,15 @@ type RoomManager struct {
 	rooms  map[string]map[*websocket.Conn]bool
 	states map[string]*RoomState
 	mu     sync.RWMutex
+}
+
+// copyReady returns a copy of ready state map.
+func copyReady(src map[string]bool) map[string]bool {
+	dst := make(map[string]bool)
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // NewRoomManager creates a new RoomManager.
@@ -40,8 +51,43 @@ func (m *RoomManager) Join(roomID string, conn *websocket.Conn) {
 	}
 	m.rooms[roomID][conn] = true
 	if _, ok := m.states[roomID]; !ok {
-		m.states[roomID] = &RoomState{}
+		m.states[roomID] = &RoomState{Ready: make(map[string]bool), Users: make(map[*websocket.Conn]string)}
 	}
+}
+
+// RegisterUser stores the user's name for a connection and returns current ready states.
+func (m *RoomManager) RegisterUser(roomID string, conn *websocket.Conn, name string) map[string]bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil {
+		st = &RoomState{Ready: make(map[string]bool), Users: make(map[*websocket.Conn]string)}
+		m.states[roomID] = st
+	}
+	st.Users[conn] = name
+	if _, ok := st.Ready[name]; !ok {
+		st.Ready[name] = false
+	}
+	return copyReady(st.Ready)
+}
+
+// SetReady marks a user as ready and returns if all are ready and current state map.
+func (m *RoomManager) SetReady(roomID, name string) (bool, map[string]bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil {
+		return false, nil
+	}
+	st.Ready[name] = true
+	all := true
+	for _, v := range st.Ready {
+		if !v {
+			all = false
+			break
+		}
+	}
+	return all, copyReady(st.Ready)
 }
 
 // Leave removes a connection from a room.
@@ -50,6 +96,12 @@ func (m *RoomManager) Leave(roomID string, conn *websocket.Conn) {
 	defer m.mu.Unlock()
 	if clients, ok := m.rooms[roomID]; ok {
 		delete(clients, conn)
+		if st, ok := m.states[roomID]; ok {
+			if name, exists := st.Users[conn]; exists {
+				delete(st.Users, conn)
+				delete(st.Ready, name)
+			}
+		}
 		if len(clients) == 0 {
 			delete(m.rooms, roomID)
 			delete(m.states, roomID)
@@ -142,6 +194,21 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 	}
 
 	switch req.Type {
+	case "join":
+		states := r.manager.RegisterUser(r.roomID, r.conn, req.User)
+		resp, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+		r.conn.WriteMessage(websocket.TextMessage, resp)
+		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
+	case "ready":
+		all, states := r.manager.SetReady(r.roomID, req.User)
+		resp, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+		r.conn.WriteMessage(websocket.TextMessage, resp)
+		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
+		if all {
+			r.manager.StartQuestion(r.roomID)
+			startMsg, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})
+			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, startMsg)
+		}
 	case "start":
 		r.manager.StartQuestion(r.roomID)
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})

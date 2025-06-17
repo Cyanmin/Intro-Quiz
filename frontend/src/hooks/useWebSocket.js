@@ -3,10 +3,11 @@ import { useEffect, useRef } from "react";
 export default function useWebSocket(url) {
   const socketRef = useRef(null);
 
-  const connect = (roomId, onMessage) => {
+  const connect = (roomId, onMessage, onOpen) => {
     const socket = new WebSocket(`${url}?roomId=${roomId}`);
     socketRef.current = socket;
     socket.onmessage = onMessage;
+    if (onOpen) socket.onopen = onOpen;
   };
 
   useEffect(() => {

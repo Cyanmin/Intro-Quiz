@@ -13,6 +13,8 @@ export default function RoomPage() {
   const questionActive = useRoomStore((state) => state.questionActive);
   const winner = useRoomStore((state) => state.winner);
   const messages = useRoomStore((state) => state.messages);
+  const readyStates = useRoomStore((state) => state.readyStates);
+  const setReadyStates = useRoomStore((state) => state.setReadyStates);
   const [joined, setJoined] = useState(false);
   const [name, setName] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -26,45 +28,54 @@ export default function RoomPage() {
     clearMessages();
     setName(userName);
     setRoomId(rid);
-    connect(rid, (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "start") {
-        setQuestionActive(true);
-        setWinner(null);
-        setPauseInfo("");
-        setPlaying(true);
-        setTimeLeft(10);
-        if (timerRef.current) clearInterval(timerRef.current);
-        timerRef.current = setInterval(() => {
-          setTimeLeft((t) => (t > 0 ? t - 1 : 0));
-        }, 1000);
-      } else if (data.type === "buzz_result") {
-        setWinner(data.user);
-        setQuestionActive(false);
-        setPlaying(false);
-        clearInterval(timerRef.current);
-      } else if (data.type === "timeout") {
-        setWinner(null);
-        setQuestionActive(false);
-        setPlaying(false);
-        clearInterval(timerRef.current);
-      } else if (data.type === "answer") {
-        setPlaying(false);
-        setPauseInfo(`${data.user}さんが解答ボタンを押しました - 再生停止中`);
-      }
-      addMessage(event.data);
-    });
+    connect(
+      rid,
+      (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === "start") {
+          setQuestionActive(true);
+          setWinner(null);
+          setPauseInfo("");
+          setPlaying(true);
+          setTimeLeft(10);
+          if (timerRef.current) clearInterval(timerRef.current);
+          timerRef.current = setInterval(() => {
+            setTimeLeft((t) => (t > 0 ? t - 1 : 0));
+          }, 1000);
+        } else if (data.type === "buzz_result") {
+          setWinner(data.user);
+          setQuestionActive(false);
+          setPlaying(false);
+          clearInterval(timerRef.current);
+        } else if (data.type === "timeout") {
+          setWinner(null);
+          setQuestionActive(false);
+          setPlaying(false);
+          clearInterval(timerRef.current);
+        } else if (data.type === "answer") {
+          setPlaying(false);
+          setPauseInfo(`${data.user}さんが解答ボタンを押しました - 再生停止中`);
+        } else if (data.type === "ready_state") {
+          setReadyStates(data.readyUsers);
+        }
+        addMessage(event.data);
+      },
+      () => {
+        send(JSON.stringify({ type: "join", user: userName }));
+      },
+    );
+    setReadyStates({});
     setJoined(true);
-  };
-
-  const sendStart = () => {
-    send(JSON.stringify({ type: "start" }));
   };
 
   const sendBuzz = () => {
     send(JSON.stringify({ type: "buzz", user: name }));
     setPlaying(false);
     setPauseInfo(`${name}さんが解答ボタンを押しました - 再生停止中`);
+  };
+
+  const sendReady = () => {
+    send(JSON.stringify({ type: "ready", user: name }));
   };
 
   useEffect(() => {
@@ -77,7 +88,14 @@ export default function RoomPage() {
     <div>
       {joined ? (
         <div>
-          <button onClick={sendStart}>問題開始</button>
+          {!readyStates[name] && !questionActive && (
+            <button onClick={sendReady}>準備完了</button>
+          )}
+          {Object.entries(readyStates).map(([u, r]) => (
+            <p key={u}>
+              {u}さん：{r ? "準備完了" : "未準備"}
+            </p>
+          ))}
           {playing && <p>再生中…</p>}
           {pauseInfo && <p>{pauseInfo}</p>}
           <YouTubePlayer videoId="M7lc1UVf-VE" playing={playing} />
