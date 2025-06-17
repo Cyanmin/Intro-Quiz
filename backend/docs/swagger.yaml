@@ -20,6 +20,39 @@ paths:
       summary: Say hello
       tags:
       - example
+  /api/youtube/random:
+    get:
+      description: Retrieve a random video's ID from a YouTube playlist.
+      parameters:
+      - description: Playlist ID
+        in: query
+        name: playlistId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get random video ID
+      tags:
+      - youtube
   /api/youtube/test:
     get:
       description: Retrieve the first video's title from a fixed YouTube playlist.

@@ -38,6 +38,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/youtube/random": {
+            "get": {
+                "description": "Retrieve a random video's ID from a YouTube playlist.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "youtube"
+                ],
+                "summary": "Get random video ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playlist ID",
+                        "name": "playlistId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/youtube/test": {
             "get": {
                 "description": "Retrieve the first video's title from a fixed YouTube playlist.",
