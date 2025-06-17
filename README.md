@@ -5,7 +5,16 @@
 ## プロジェクト構成
 
 - `frontend/` - Viteで構築されたReactアプリ。
-- `backend/` - Gorillaを使用したGoのWebSocketサーバー。
+- `backend/` - GinとGorilla WebSocketで実装されたGoサーバー。
+
+### backend ディレクトリ構成
+
+- `cmd/intro-quiz/` - サーバーのエントリポイント。
+- `internal/handler/` - HTTP や WebSocket のハンドラー。
+- `internal/service/` - ビジネスロジック。
+- `internal/model/` - ドメインモデルの定義。
+- `pkg/ws/` - WebSocket 接続の管理ヘルパー。
+- `config/` - 設定読み込み用（将来利用）。
 
 各ディレクトリには、コンテナイメージをビルドするためのDockerfileが含まれています。
 
@@ -30,7 +39,7 @@ npm run dev
 
 ```bash
 cd backend
-go run main.go
+go run ./cmd/intro-quiz
 ```
 
 サーバーは `http://localhost:8080` で待ち受けます。
