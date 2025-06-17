@@ -3,10 +3,11 @@ import { useState } from "react";
 export default function RoomJoinForm({ onJoin }) {
   const [roomId, setRoomId] = useState("");
   const [name, setName] = useState("");
+  const [playlistId, setPlaylistId] = useState("");
 
   const submit = (e) => {
     e.preventDefault();
-    onJoin(roomId, name);
+    onJoin(roomId, name, playlistId);
   };
 
   return (
@@ -20,6 +21,11 @@ export default function RoomJoinForm({ onJoin }) {
         placeholder="名前を入力してください"
         value={name}
         onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        placeholder="プレイリストIDを入力してください"
+        value={playlistId}
+        onChange={(e) => setPlaylistId(e.target.value)}
       />
       <button type="submit">参加</button>
     </form>
