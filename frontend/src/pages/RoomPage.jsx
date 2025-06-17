@@ -3,6 +3,7 @@ import RoomJoinForm from "../features/room/RoomJoinForm";
 import { useRoomStore } from "../stores/roomStore";
 import useWebSocket from "../hooks/useWebSocket";
 import { WS_URL } from "../services/websocket";
+import { API_URL } from "../services/api";
 import YouTubePlayer from "../components/YouTubePlayer";
 
 export default function RoomPage() {
@@ -18,16 +19,19 @@ export default function RoomPage() {
   const [joined, setJoined] = useState(false);
   const [name, setName] = useState("");
   const [roomId, setRoomId] = useState("");
+  const [playlistId, setPlaylistId] = useState("");
+  const [videoId, setVideoId] = useState("");
   const [timeLeft, setTimeLeft] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [pauseInfo, setPauseInfo] = useState("");
   const timerRef = useRef(null);
   const { connect, send } = useWebSocket(WS_URL);
 
-  const handleJoin = (rid, userName) => {
+  const handleJoin = (rid, userName, pid) => {
     clearMessages();
     setName(userName);
     setRoomId(rid);
+    setPlaylistId(pid);
     connect(
       rid,
       (event) => {
@@ -62,6 +66,13 @@ export default function RoomPage() {
       },
       () => {
         send(JSON.stringify({ type: "join", user: userName }));
+        fetch(`${API_URL}/api/youtube/random?playlistId=${encodeURIComponent(pid)}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.videoId) {
+              setVideoId(data.videoId);
+            }
+          });
       },
     );
     setReadyStates({});
@@ -98,7 +109,7 @@ export default function RoomPage() {
           ))}
           {playing && <p>再生中…</p>}
           {pauseInfo && <p>{pauseInfo}</p>}
-          <YouTubePlayer videoId="M7lc1UVf-VE" playing={playing} />
+          <YouTubePlayer videoId={videoId} playing={playing} />
           {questionActive && (
             <div>
               <p>制限時間: {timeLeft}秒</p>
