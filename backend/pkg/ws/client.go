@@ -33,9 +33,11 @@ func (c *Client) Listen() {
 		}
 		log.Printf("recv: %s", msg)
 		respType, respMsg := c.Service.ProcessMessage(mt, msg)
-		if err := c.Conn.WriteMessage(respType, respMsg); err != nil {
-			log.Printf("write: %v", err)
-			break
+		if respMsg != nil {
+			if err := c.Conn.WriteMessage(respType, respMsg); err != nil {
+				log.Printf("write: %v", err)
+				break
+			}
 		}
 	}
 }
