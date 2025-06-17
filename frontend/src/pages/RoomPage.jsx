@@ -3,6 +3,7 @@ import RoomJoinForm from "../features/room/RoomJoinForm";
 import { useRoomStore } from "../stores/roomStore";
 import useWebSocket from "../hooks/useWebSocket";
 import { WS_URL } from "../services/websocket";
+import YouTubePlayer from "../components/YouTubePlayer";
 
 export default function RoomPage() {
   const addMessage = useRoomStore((state) => state.addMessage);
@@ -16,6 +17,8 @@ export default function RoomPage() {
   const [name, setName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [timeLeft, setTimeLeft] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [pauseInfo, setPauseInfo] = useState("");
   const timerRef = useRef(null);
   const { connect, send } = useWebSocket(WS_URL);
 
@@ -28,6 +31,8 @@ export default function RoomPage() {
       if (data.type === "start") {
         setQuestionActive(true);
         setWinner(null);
+        setPauseInfo("");
+        setPlaying(true);
         setTimeLeft(10);
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
@@ -36,11 +41,16 @@ export default function RoomPage() {
       } else if (data.type === "buzz_result") {
         setWinner(data.user);
         setQuestionActive(false);
+        setPlaying(false);
         clearInterval(timerRef.current);
       } else if (data.type === "timeout") {
         setWinner(null);
         setQuestionActive(false);
+        setPlaying(false);
         clearInterval(timerRef.current);
+      } else if (data.type === "answer") {
+        setPlaying(false);
+        setPauseInfo(`${data.user}さんが解答ボタンを押しました - 再生停止中`);
       }
       addMessage(event.data);
     });
@@ -53,6 +63,8 @@ export default function RoomPage() {
 
   const sendBuzz = () => {
     send(JSON.stringify({ type: "buzz", user: name }));
+    setPlaying(false);
+    setPauseInfo(`${name}さんが解答ボタンを押しました - 再生停止中`);
   };
 
   useEffect(() => {
@@ -66,6 +78,9 @@ export default function RoomPage() {
       {joined ? (
         <div>
           <button onClick={sendStart}>問題開始</button>
+          {playing && <p>再生中…</p>}
+          {pauseInfo && <p>{pauseInfo}</p>}
+          <YouTubePlayer videoId="M7lc1UVf-VE" playing={playing} />
           {questionActive && (
             <div>
               <p>制限時間: {timeLeft}秒</p>

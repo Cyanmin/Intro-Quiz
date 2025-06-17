@@ -147,6 +147,10 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})
 		r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resp)
 	case "buzz":
+		// broadcast that someone pressed the answer button
+		note, _ := json.Marshal(&model.ServerMessage{Type: "answer", User: req.User, Timestamp: time.Now().UnixMilli()})
+		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, note)
+
 		if r.manager.SetFastest(r.roomID, req.User) {
 			resp, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: req.User, Timestamp: time.Now().UnixMilli()})
 			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resp)
