@@ -36,7 +36,7 @@ func WSHandler(c *gin.Context) {
 		log.Printf("upgrade: %v", err)
 		return
 	}
-	client := ws.NewClient(conn, nil)
+	client := ws.NewClient(conn, roomID, nil)
 	svc := service.NewRoomService(roomManager, roomID, client, youtubeService, playlistID)
 	client.Service = svc
 	roomManager.Join(roomID, client)
