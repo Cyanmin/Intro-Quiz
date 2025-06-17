@@ -77,3 +77,43 @@ docker run -p 8080:8080 intro-quiz-backend
 ```bash
 docker-compose up --build
 ```
+
+## 最小構成の YouTube プレイヤー例
+
+react-youtube を利用する際は、iframe の読み込み完了前に再生を試みるとエラーが発生します。
+onReady イベントで読み込みを確認してから再生コマンドを送る例を以下に示します。
+
+```jsx
+import { useEffect, useRef, useState } from "react";
+import YouTube from "react-youtube";
+
+export default function MinimalYouTubePlayer({ videoId, playing }) {
+  const playerRef = useRef(null);
+  const [isReady, setIsReady] = useState(false);
+
+  const opts = {
+    playerVars: {
+      origin: window.location.origin,
+      enablejsapi: 1,
+    },
+  };
+
+  const handleReady = (event) => {
+    playerRef.current = event.target;
+    setIsReady(true);
+  };
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (playing) {
+      playerRef.current.playVideo();
+    } else {
+      playerRef.current.pauseVideo();
+    }
+  }, [playing, isReady]);
+
+  return <YouTube videoId={videoId} opts={opts} onReady={handleReady} />;
+}
+```
+
+このコンポーネントを使うことで、`playing` が `true` のときに iframe が準備でき次第、自動で動画が再生されます。
