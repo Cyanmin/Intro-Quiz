@@ -24,6 +24,7 @@ func main() {
 
 	router.GET("/ws", handler.WSHandler)
 	router.GET("/api/youtube/test", handler.YouTubeTestHandler)
+	router.GET("/api/youtube/random", handler.YouTubeRandomHandler)
 	router.GET("/api/hello", handler.HelloHandler)
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
