@@ -4,7 +4,7 @@
 
 ## プロジェクト構成
 
-- `frontend/` - Viteで構築されたReactアプリ。
+- `frontend/` - Viteで構築されたReactアプリ。`frontend/README.md` にディレクトリ構成をまとめています。
 - `backend/` - GinとGorilla WebSocketで実装されたGoサーバー。
 
 ### backend ディレクトリ構成
