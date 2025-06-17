@@ -37,6 +37,55 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/youtube/test": {
+            "get": {
+                "description": "Retrieve the first video's title from a fixed YouTube playlist.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "youtube"
+                ],
+                "summary": "Get first video title",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/ws": {
+            "get": {
+                "description": "Upgrade the request and start echoing messages over WebSocket.",
+                "tags": [
+                    "websocket"
+                ],
+                "summary": "WebSocket endpoint",
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     }
 }`
