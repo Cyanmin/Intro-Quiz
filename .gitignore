@@ -5,5 +5,3 @@ build
 *.test
 *.out
 .DS_Store
-
-.env
