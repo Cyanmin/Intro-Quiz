@@ -16,7 +16,6 @@ type RoomState struct {
 	Active  bool
 	Ready   map[string]bool
 	Users   map[*websocket.Conn]string
-	VideoID string
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
@@ -125,7 +124,7 @@ func (m *RoomManager) Broadcast(roomID string, sender *websocket.Conn, mt int, m
 }
 
 // StartQuestion marks the room as active and resets fastest user.
-func (m *RoomManager) StartQuestion(roomID, videoID string) {
+func (m *RoomManager) StartQuestion(roomID string) {
 	m.mu.Lock()
 	st, ok := m.states[roomID]
 	if !ok {
@@ -134,7 +133,6 @@ func (m *RoomManager) StartQuestion(roomID, videoID string) {
 	}
 	st.Active = true
 	st.Fastest = ""
-	st.VideoID = videoID
 	m.mu.Unlock()
 
 	go func() {
@@ -178,16 +176,14 @@ func (m *RoomManager) IsActive(roomID string) bool {
 
 // RoomService uses RoomManager to broadcast messages within a room.
 type RoomService struct {
-	manager    *RoomManager
-	roomID     string
-	conn       *websocket.Conn
-	yt         *YouTubeService
-	playlistID string
+	manager *RoomManager
+	roomID  string
+	conn    *websocket.Conn
 }
 
 // NewRoomService creates a RoomService for a specific connection and room.
-func NewRoomService(m *RoomManager, roomID string, conn *websocket.Conn, yt *YouTubeService, playlistID string) *RoomService {
-	return &RoomService{manager: m, roomID: roomID, conn: conn, yt: yt, playlistID: playlistID}
+func NewRoomService(m *RoomManager, roomID string, conn *websocket.Conn) *RoomService {
+	return &RoomService{manager: m, roomID: roomID, conn: conn}
 }
 
 // ProcessMessage broadcasts the received message to the room.
@@ -209,21 +205,13 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		r.conn.WriteMessage(websocket.TextMessage, resp)
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
 		if all {
-			videoID, err := r.yt.GetRandomVideoID(r.playlistID)
-			if err != nil {
-				return 0, nil
-			}
-			r.manager.StartQuestion(r.roomID, videoID)
-			startMsg, _ := json.Marshal(&model.ServerMessage{Type: "start", VideoID: videoID, Timestamp: time.Now().UnixMilli()})
+			r.manager.StartQuestion(r.roomID)
+			startMsg, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})
 			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, startMsg)
 		}
 	case "start":
-		videoID, err := r.yt.GetRandomVideoID(r.playlistID)
-		if err != nil {
-			return 0, nil
-		}
-		r.manager.StartQuestion(r.roomID, videoID)
-		resp, _ := json.Marshal(&model.ServerMessage{Type: "start", VideoID: videoID, Timestamp: time.Now().UnixMilli()})
+		r.manager.StartQuestion(r.roomID)
+		resp, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})
 		r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resp)
 	case "buzz":
 		// broadcast that someone pressed the answer button

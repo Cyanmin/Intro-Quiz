@@ -3,7 +3,6 @@ package handler
 import (
 	"log"
 	"net/http"
-	"os"
 
 	"intro-quiz/backend/internal/service"
 	"intro-quiz/backend/pkg/ws"
@@ -17,8 +16,6 @@ var upgrader = websocket.Upgrader{
 }
 
 var roomManager = service.NewRoomManager()
-var youtubeService = service.NewYouTubeService(os.Getenv("YOUTUBE_API_KEY"))
-var playlistID = os.Getenv("YOUTUBE_PLAYLIST_ID")
 
 // WSHandler upgrades the HTTP request to a WebSocket connection.
 // @Summary      WebSocket endpoint
@@ -39,7 +36,7 @@ func WSHandler(c *gin.Context) {
 	roomManager.Join(roomID, conn)
 	defer roomManager.Leave(roomID, conn)
 
-	svc := service.NewRoomService(roomManager, roomID, conn, youtubeService, playlistID)
+	svc := service.NewRoomService(roomManager, roomID, conn)
 	client := ws.NewClient(conn, svc)
 	log.Printf("client connected: %s room:%s", conn.RemoteAddr(), roomID)
 	client.Listen()

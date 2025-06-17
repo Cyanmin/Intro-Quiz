@@ -10,6 +10,4 @@ export const useRoomStore = create((set) => ({
   setWinner: (name) => set({ winner: name }),
   readyStates: {},
   setReadyStates: (states) => set({ readyStates: states }),
-  currentVideoId: null,
-  setCurrentVideoId: (id) => set({ currentVideoId: id }),
 }));
