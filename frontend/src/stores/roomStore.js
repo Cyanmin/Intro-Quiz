@@ -8,4 +8,6 @@ export const useRoomStore = create((set) => ({
   winner: null,
   setQuestionActive: (active) => set({ questionActive: active }),
   setWinner: (name) => set({ winner: name }),
+  readyStates: {},
+  setReadyStates: (states) => set({ readyStates: states }),
 }));

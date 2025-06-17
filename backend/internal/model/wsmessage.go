@@ -8,7 +8,8 @@ type ClientMessage struct {
 
 // ServerMessage represents a message sent to clients.
 type ServerMessage struct {
-	Type      string `json:"type"`
-	User      string `json:"user,omitempty"`
-	Timestamp int64  `json:"timestamp"`
+	Type       string          `json:"type"`
+	User       string          `json:"user,omitempty"`
+	Timestamp  int64           `json:"timestamp"`
+	ReadyUsers map[string]bool `json:"readyUsers,omitempty"`
 }
