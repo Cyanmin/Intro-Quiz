@@ -1,7 +1,12 @@
 import YouTube from "react-youtube";
 import { useEffect, useRef, useState } from "react";
 
-export default function YouTubePlayer({ videoId, playing, onPause }) {
+export default function YouTubePlayer({
+  videoId,
+  playing,
+  onPause,
+  onPlayerReady,
+}) {
   const playerRef = useRef(null);
   const [ready, setReady] = useState(false);
 
@@ -17,7 +22,15 @@ export default function YouTubePlayer({ videoId, playing, onPause }) {
   const onReady = (event) => {
     playerRef.current = event.target;
     setReady(true);
+    if (onPlayerReady) {
+      onPlayerReady();
+    }
   };
+
+  useEffect(() => {
+    setReady(false);
+    playerRef.current = null;
+  }, [videoId]);
 
   useEffect(() => {
     if (ready) {
