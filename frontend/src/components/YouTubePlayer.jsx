@@ -16,6 +16,8 @@ export default function YouTubePlayer({
     playerVars: {
       modestbranding: 1,
       rel: 0,
+      // Specify origin so that the YouTube iframe matches the current host
+      origin: window.location.origin,
     },
   };
 

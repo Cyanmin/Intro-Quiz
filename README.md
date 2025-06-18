@@ -40,7 +40,10 @@ npm install
 npm run dev
 ```
 
-ブラウザで `http://localhost:5173` を開きます。
+ブラウザで `https://localhost:5173` を開きます。
+
+開発時は Vite を HTTPS で起動するため、自己署名証明書の作成を推奨します。
+`mkcert` などを利用して証明書を生成し、ブラウザに信頼させてください。
 
 ### バックエンド
 
