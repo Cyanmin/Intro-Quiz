@@ -33,12 +33,13 @@ export default function YouTubePlayer({
   }, [videoId]);
 
   useEffect(() => {
-    if (ready) {
-      if (playing) {
-        playerRef.current.playVideo();
-      } else {
-        playerRef.current.pauseVideo();
-      }
+    if (!ready || !playerRef.current) {
+      return;
+    }
+    if (playing) {
+      playerRef.current.playVideo();
+    } else {
+      playerRef.current.pauseVideo();
     }
   }, [playing, ready]);
 

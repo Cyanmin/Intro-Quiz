@@ -30,6 +30,17 @@ export default function RoomPage() {
   const timerRef = useRef(null);
   const { connect, send } = useWebSocket(WS_URL);
 
+  // Start the per-question countdown
+  const startTimer = () => {
+    setTimeLeft(TIME_LIMIT);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    timerRef.current = setInterval(() => {
+      setTimeLeft((t) => (t > 0 ? t - 1 : 0));
+    }, 1000);
+  };
+
   useEffect(() => {
     setPlayerReady(false);
   }, [videoId]);
@@ -49,7 +60,7 @@ export default function RoomPage() {
           setWinner(null);
           setPauseInfo("");
           setPlaying(true);
-          setTimeLeft(TIME_LIMIT);
+          startTimer();
         } else if (data.type === "buzz_result") {
           setWinner(data.user);
           setQuestionActive(false);
@@ -110,14 +121,7 @@ export default function RoomPage() {
   };
 
   useEffect(() => {
-    if (questionActive) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      timerRef.current = setInterval(() => {
-        setTimeLeft((t) => (t > 0 ? t - 1 : 0));
-      }, 1000);
-    } else if (timerRef.current) {
+    if (!questionActive && timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
