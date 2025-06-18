@@ -25,15 +25,21 @@ export default function RoomPage() {
   const [videoId, setVideoId] = useState("");
   const [timeLeft, setTimeLeft] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [playerReady, setPlayerReady] = useState(false);
   const [pauseInfo, setPauseInfo] = useState("");
   const timerRef = useRef(null);
   const { connect, send } = useWebSocket(WS_URL);
+
+  useEffect(() => {
+    setPlayerReady(false);
+  }, [videoId]);
 
   const handleJoin = (rid, userName, pid) => {
     clearMessages();
     setName(userName);
     setRoomId(rid);
     setPlaylistId(pid);
+    setPlayerReady(false);
     connect(
       rid,
       (event) => {
@@ -44,10 +50,6 @@ export default function RoomPage() {
           setPauseInfo("");
           setPlaying(true);
           setTimeLeft(TIME_LIMIT);
-          if (timerRef.current) clearInterval(timerRef.current);
-          timerRef.current = setInterval(() => {
-            setTimeLeft((t) => (t > 0 ? t - 1 : 0));
-          }, 1000);
         } else if (data.type === "buzz_result") {
           setWinner(data.user);
           setQuestionActive(false);
@@ -100,6 +102,7 @@ export default function RoomPage() {
       .then((data) => {
         if (data.videoId) {
           setVideoId(data.videoId);
+          setPlayerReady(false);
           // Notify the server to start the question
           send(JSON.stringify({ type: "start" }));
         }
@@ -107,7 +110,14 @@ export default function RoomPage() {
   };
 
   useEffect(() => {
-    if (!questionActive && timerRef.current) {
+    if (questionActive) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      timerRef.current = setInterval(() => {
+        setTimeLeft((t) => (t > 0 ? t - 1 : 0));
+      }, 1000);
+    } else if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
@@ -124,7 +134,9 @@ export default function RoomPage() {
       {joined ? (
         <div>
           {!readyStates[name] && !questionActive && (
-            <button onClick={sendReady}>準備完了</button>
+            <button onClick={sendReady} disabled={!playerReady}>
+              準備完了
+            </button>
           )}
           {Object.entries(readyStates).map(([u, r]) => (
             <p key={u}>
@@ -133,7 +145,11 @@ export default function RoomPage() {
           ))}
           {playing && <p>再生中…</p>}
           {pauseInfo && <p>{pauseInfo}</p>}
-          <YouTubePlayer videoId={videoId} playing={playing} />
+          <YouTubePlayer
+            videoId={videoId}
+            playing={playing}
+            onPlayerReady={() => setPlayerReady(true)}
+          />
           {questionActive && (
             <div>
               <p>制限時間: {timeLeft}秒</p>
