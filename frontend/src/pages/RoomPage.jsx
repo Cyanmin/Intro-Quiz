@@ -4,6 +4,7 @@ import { useRoomStore } from "../stores/roomStore";
 import useWebSocket from "../hooks/useWebSocket";
 import { WS_URL } from "../services/websocket";
 import YouTubePlayer from "../components/YouTubePlayer";
+import useHelloQuery from "../hooks/useHelloQuery";
 
 const TIME_LIMIT = parseInt(import.meta.env.VITE_TIME_LIMIT) || 10;
 
@@ -25,6 +26,8 @@ export default function RoomPage() {
   const [pauseInfo, setPauseInfo] = useState("");
   const timerRef = useRef(null);
   const { connect, send } = useWebSocket(WS_URL);
+  const { data: helloData, isLoading: helloLoading, error: helloError } =
+    useHelloQuery();
 
   const handleJoin = (rid, userName) => {
     clearMessages();
@@ -88,6 +91,9 @@ export default function RoomPage() {
 
   return (
     <div>
+      {helloLoading && <p>Loading...</p>}
+      {helloError && <p>Error loading greeting</p>}
+      {helloData && <p>{helloData.message}</p>}
       {joined ? (
         <div>
           {!readyStates[name] && !questionActive && (
