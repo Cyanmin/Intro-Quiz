@@ -2,6 +2,7 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 COPY package.json vite.config.js index.html ./
+COPY .env ./
 COPY src ./src
 RUN npm install
 RUN npm run build

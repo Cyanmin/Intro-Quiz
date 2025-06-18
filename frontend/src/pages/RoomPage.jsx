@@ -5,6 +5,8 @@ import useWebSocket from "../hooks/useWebSocket";
 import { WS_URL } from "../services/websocket";
 import YouTubePlayer from "../components/YouTubePlayer";
 
+const TIME_LIMIT = parseInt(import.meta.env.VITE_TIME_LIMIT) || 10;
+
 export default function RoomPage() {
   const addMessage = useRoomStore((state) => state.addMessage);
   const clearMessages = useRoomStore((state) => state.clearMessages);
@@ -37,7 +39,7 @@ export default function RoomPage() {
           setWinner(null);
           setPauseInfo("");
           setPlaying(true);
-          setTimeLeft(10);
+          setTimeLeft(TIME_LIMIT);
           if (timerRef.current) clearInterval(timerRef.current);
           timerRef.current = setInterval(() => {
             setTimeLeft((t) => (t > 0 ? t - 1 : 0));

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"intro-quiz/backend/internal/config"
 	"intro-quiz/backend/internal/model"
 )
 
@@ -136,7 +137,7 @@ func (m *RoomManager) StartQuestion(roomID string) {
 	m.mu.Unlock()
 
 	go func() {
-		time.Sleep(10 * time.Second)
+		time.Sleep(time.Duration(config.TimeLimit) * time.Second)
 		m.mu.Lock()
 		st := m.states[roomID]
 		if st != nil && st.Active && st.Fastest == "" {
