@@ -6,6 +6,8 @@ export default function YouTubePlayer({
   playing,
   onPause,
   onPlayerReady,
+  onError,
+  onPlaybackQualityChange,
 }) {
   const playerRef = useRef(null);
   const [ready, setReady] = useState(false);
@@ -24,6 +26,23 @@ export default function YouTubePlayer({
     setReady(true);
     if (onPlayerReady) {
       onPlayerReady();
+    }
+  };
+
+  const handleError = (event) => {
+    if (onError) {
+      onError(event);
+    } else {
+      console.error("YouTube Player error:", event.data);
+      alert("再生中にエラーが発生しました");
+    }
+  };
+
+  const handlePlaybackQualityChange = (event) => {
+    if (onPlaybackQualityChange) {
+      onPlaybackQualityChange(event);
+    } else {
+      console.log("Playback quality changed:", event.data);
     }
   };
 
@@ -47,6 +66,8 @@ export default function YouTubePlayer({
       videoId={videoId}
       opts={opts}
       onReady={onReady}
+      onError={handleError}
+      onPlaybackQualityChange={handlePlaybackQualityChange}
       style={{ display: "none" }}
     />
   );
