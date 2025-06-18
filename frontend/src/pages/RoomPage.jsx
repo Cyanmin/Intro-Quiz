@@ -92,6 +92,19 @@ export default function RoomPage() {
     send(JSON.stringify({ type: "ready", user: name }));
   };
 
+  // Fetch a new random video and start the next quiz round
+  const nextQuestion = () => {
+    fetch(`${API_URL}/api/youtube/random?playlistId=${encodeURIComponent(playlistId)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.videoId) {
+          setVideoId(data.videoId);
+          // Notify the server to start the question
+          send(JSON.stringify({ type: "start" }));
+        }
+      });
+  };
+
   useEffect(() => {
     if (!questionActive && timerRef.current) {
       clearInterval(timerRef.current);
@@ -127,6 +140,9 @@ export default function RoomPage() {
             </div>
           )}
           {winner && <p>{winner}さんが解答権を獲得しました</p>}
+          {!questionActive && (
+            <button onClick={nextQuestion}>次の問題</button>
+          )}
           <ul>
             {messages.map((msg, i) => (
               <li key={i}>{msg}</li>
