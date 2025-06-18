@@ -51,11 +51,13 @@ export default function RoomPage() {
           setQuestionActive(false);
           setPlaying(false);
           clearInterval(timerRef.current);
+          timerRef.current = null;
         } else if (data.type === "timeout") {
           setWinner(null);
           setQuestionActive(false);
           setPlaying(false);
           clearInterval(timerRef.current);
+          timerRef.current = null;
         } else if (data.type === "answer") {
           setPlaying(false);
           setPauseInfo(`${data.user}さんが解答ボタンを押しました - 再生停止中`);
@@ -92,7 +94,14 @@ export default function RoomPage() {
   useEffect(() => {
     if (!questionActive && timerRef.current) {
       clearInterval(timerRef.current);
+      timerRef.current = null;
     }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [questionActive]);
 
   return (
