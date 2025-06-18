@@ -41,7 +41,8 @@ export default function RoomPage() {
           setWinner(null);
           setPauseInfo("");
           setPlaying(true);
-          setTimeLeft(10);
+          // Set countdown timer to 30 seconds
+          setTimeLeft(30);
           if (timerRef.current) clearInterval(timerRef.current);
           timerRef.current = setInterval(() => {
             setTimeLeft((t) => (t > 0 ? t - 1 : 0));

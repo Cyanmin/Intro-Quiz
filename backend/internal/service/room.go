@@ -136,7 +136,8 @@ func (m *RoomManager) StartQuestion(roomID string) {
 	m.mu.Unlock()
 
 	go func() {
-		time.Sleep(10 * time.Second)
+               // Allow 30 seconds for players to buzz in
+               time.Sleep(30 * time.Second)
 		m.mu.Lock()
 		st := m.states[roomID]
 		if st != nil && st.Active && st.Fastest == "" {
