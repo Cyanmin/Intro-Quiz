@@ -54,6 +54,9 @@ go run ./cmd/intro-quiz
 バックエンドを起動する前に `backend/.env.example` を `backend/.env` にコピーし、
 `YOUTUBE_API_KEY` などの値を適切に設定してください。`docker-compose.yml` も
 このファイルを利用します。
+フロントエンドも `frontend/env.example` を `frontend/.env` にコピーしてから起動し
+ます。こちらも `docker-compose.yml` で利用され、`VITE_TIME_LIMIT` とバックエンド
+側の `TIME_LIMIT` を同じ値に設定すると、クイズの制限時間を簡単に変更できます。
 
 ### Docker での実行
 
