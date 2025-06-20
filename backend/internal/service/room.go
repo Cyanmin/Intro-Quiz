@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"os"
 	"sync"
 	"time"
 
@@ -198,6 +199,16 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 	case "join":
 		states := r.manager.RegisterUser(r.roomID, r.conn, req.User)
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+		r.conn.WriteMessage(websocket.TextMessage, resp)
+		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
+	case "playlist":
+		apiKey := os.Getenv("YOUTUBE_API_KEY")
+		yt := NewYouTubeService(apiKey)
+		videoID, err := yt.GetFirstVideoID(req.PlaylistID)
+		if err != nil {
+			break
+		}
+		resp, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: videoID, Timestamp: time.Now().UnixMilli()})
 		r.conn.WriteMessage(websocket.TextMessage, resp)
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
 	case "ready":

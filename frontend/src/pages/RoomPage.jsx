@@ -23,6 +23,8 @@ export default function RoomPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [pauseInfo, setPauseInfo] = useState("");
+  const [videoId, setVideoId] = useState("M7lc1UVf-VE");
+  const [playlistInput, setPlaylistInput] = useState("");
   const timerRef = useRef(null);
   const { connect, send } = useWebSocket(WS_URL);
 
@@ -59,6 +61,8 @@ export default function RoomPage() {
           setPauseInfo(`${data.user}さんが解答ボタンを押しました - 再生停止中`);
         } else if (data.type === "ready_state") {
           setReadyStates(data.readyUsers);
+        } else if (data.type === "video") {
+          setVideoId(data.videoId);
         }
         addMessage(event.data);
       },
@@ -74,6 +78,12 @@ export default function RoomPage() {
     send(JSON.stringify({ type: "buzz", user: name }));
     setPlaying(false);
     setPauseInfo(`${name}さんが解答ボタンを押しました - 再生停止中`);
+  };
+
+  const sendPlaylist = () => {
+    if (playlistInput) {
+      send(JSON.stringify({ type: "playlist", playlistId: playlistInput }));
+    }
   };
 
   const sendReady = () => {
@@ -98,9 +108,17 @@ export default function RoomPage() {
               {u}さん：{r ? "準備完了" : "未準備"}
             </p>
           ))}
+          <div>
+            <input
+              placeholder="Playlist ID"
+              value={playlistInput}
+              onChange={(e) => setPlaylistInput(e.target.value)}
+            />
+            <button onClick={sendPlaylist}>送信</button>
+          </div>
           {playing && <p>再生中…</p>}
           {pauseInfo && <p>{pauseInfo}</p>}
-          <YouTubePlayer videoId="M7lc1UVf-VE" playing={playing} />
+          <YouTubePlayer videoId={videoId} playing={playing} />
           {questionActive && (
             <div>
               <p>制限時間: {timeLeft}秒</p>
