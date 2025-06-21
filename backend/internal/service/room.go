@@ -225,7 +225,10 @@ func (m *RoomManager) SubmitAnswer(roomID, user, answer string) (bool, string) {
 	if st == nil {
 		return false, ""
 	}
-	if strings.EqualFold(strings.TrimSpace(answer), strings.TrimSpace(st.VideoTitle)) {
+	// 正解判定を「タイトルに含まれていれば正解」に変更
+	title := strings.ToLower(strings.TrimSpace(st.VideoTitle))
+	ans := strings.ToLower(strings.TrimSpace(answer))
+	if title != "" && ans != "" && strings.Contains(title, ans) {
 		st.Active = false
 		st.Fastest = ""
 		st.BuzzOrder = nil
