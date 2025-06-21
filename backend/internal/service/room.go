@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ type RoomState struct {
 	Users      map[*websocket.Conn]string
 	BuzzOrder  []string
 	VideoTitle string
+	PlaylistID string
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
@@ -28,6 +30,20 @@ type RoomManager struct {
 	rooms  map[string]map[*websocket.Conn]bool
 	states map[string]*RoomState
 	mu     sync.RWMutex
+}
+
+// ResetReady sets all ready states to false and returns the updated states.
+func (m *RoomManager) ResetReady(roomID string) map[string]bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil {
+		return nil
+	}
+	for u := range st.Ready {
+		st.Ready[u] = false
+	}
+	return copyReady(st.Ready)
 }
 
 // copyReady returns a copy of ready state map.
@@ -150,6 +166,13 @@ func (m *RoomManager) StartQuestion(roomID string) {
 			m.mu.Unlock()
 			resp, _ := json.Marshal(&model.ServerMessage{Type: "timeout", Timestamp: time.Now().UnixMilli()})
 			m.Broadcast(roomID, nil, websocket.TextMessage, resp)
+			states := m.ResetReady(roomID)
+			readyMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+			m.Broadcast(roomID, nil, websocket.TextMessage, readyMsg)
+			if vid, err := m.NextVideo(roomID); err == nil {
+				videoMsg, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: vid, Timestamp: time.Now().UnixMilli()})
+				m.Broadcast(roomID, nil, websocket.TextMessage, videoMsg)
+			}
 			return
 		}
 		m.mu.Unlock()
@@ -206,6 +229,18 @@ func (m *RoomManager) SetVideoTitle(roomID, title string) {
 	st.VideoTitle = title
 }
 
+// SetPlaylist stores the playlist ID for the room.
+func (m *RoomManager) SetPlaylist(roomID, playlistID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil {
+		st = &RoomState{Ready: make(map[string]bool), Users: make(map[*websocket.Conn]string)}
+		m.states[roomID] = st
+	}
+	st.PlaylistID = playlistID
+}
+
 // GetVideoTitle retrieves the stored video title.
 func (m *RoomManager) GetVideoTitle(roomID string) string {
 	m.mu.RLock()
@@ -215,6 +250,27 @@ func (m *RoomManager) GetVideoTitle(roomID string) string {
 		return ""
 	}
 	return st.VideoTitle
+}
+
+// NextVideo retrieves a random video using the stored playlist ID.
+func (m *RoomManager) NextVideo(roomID string) (string, error) {
+	m.mu.RLock()
+	playlist := ""
+	if st, ok := m.states[roomID]; ok {
+		playlist = st.PlaylistID
+	}
+	m.mu.RUnlock()
+	if playlist == "" {
+		return "", fmt.Errorf("playlist not set")
+	}
+	apiKey := os.Getenv("YOUTUBE_API_KEY")
+	yt := NewYouTubeService(apiKey)
+	videoID, title, err := yt.GetRandomVideo(playlist)
+	if err != nil {
+		return "", err
+	}
+	m.SetVideoTitle(roomID, title)
+	return videoID, nil
 }
 
 // SubmitAnswer checks the user's answer and advances to the next if incorrect.
@@ -292,13 +348,11 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		r.conn.WriteMessage(websocket.TextMessage, resp)
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
 	case "playlist":
-		apiKey := os.Getenv("YOUTUBE_API_KEY")
-		yt := NewYouTubeService(apiKey)
-		videoID, title, err := yt.GetRandomVideo(req.PlaylistID)
+		r.manager.SetPlaylist(r.roomID, req.PlaylistID)
+		videoID, err := r.manager.NextVideo(r.roomID)
 		if err != nil {
 			break
 		}
-		r.manager.SetVideoTitle(r.roomID, title)
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: videoID, Timestamp: time.Now().UnixMilli()})
 		r.conn.WriteMessage(websocket.TextMessage, resp)
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
@@ -336,6 +390,15 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		if !correct && next != "" {
 			nextMsg, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: next, Timestamp: time.Now().UnixMilli()})
 			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, nextMsg)
+		}
+		if correct || next == "" {
+			states := r.manager.ResetReady(r.roomID)
+			stateMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, stateMsg)
+			if vid, err := r.manager.NextVideo(r.roomID); err == nil {
+				videoMsg, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: vid, Timestamp: time.Now().UnixMilli()})
+				r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, videoMsg)
+			}
 		}
 	}
 
