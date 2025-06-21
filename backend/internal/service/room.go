@@ -14,10 +14,11 @@ import (
 
 // RoomManager manages WebSocket connections grouped by room ID.
 type RoomState struct {
-	Fastest string
-	Active  bool
-	Ready   map[string]bool
-	Users   map[*websocket.Conn]string
+	Fastest   string
+	Active    bool
+	Ready     map[string]bool
+	Users     map[*websocket.Conn]string
+	BuzzOrder []string
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
@@ -135,6 +136,7 @@ func (m *RoomManager) StartQuestion(roomID string) {
 	}
 	st.Active = true
 	st.Fastest = ""
+	st.BuzzOrder = nil
 	m.mu.Unlock()
 
 	go func() {
@@ -163,6 +165,31 @@ func (m *RoomManager) SetFastest(roomID, user string) bool {
 	st.Fastest = user
 	st.Active = false
 	return true
+}
+
+// AddBuzz appends a user to the buzz order and returns if they were first and the current order.
+func (m *RoomManager) AddBuzz(roomID, user string) (bool, []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil {
+		return false, nil
+	}
+	for _, u := range st.BuzzOrder {
+		if u == user {
+			q := append([]string(nil), st.BuzzOrder...)
+			return false, q
+		}
+	}
+	st.BuzzOrder = append(st.BuzzOrder, user)
+	first := false
+	if st.Active && st.Fastest == "" {
+		st.Fastest = user
+		st.Active = false
+		first = true
+	}
+	q := append([]string(nil), st.BuzzOrder...)
+	return first, q
 }
 
 // IsActive returns whether a question is active.
@@ -230,7 +257,11 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		note, _ := json.Marshal(&model.ServerMessage{Type: "answer", User: req.User, Timestamp: time.Now().UnixMilli()})
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, note)
 
-		if r.manager.SetFastest(r.roomID, req.User) {
+		first, order := r.manager.AddBuzz(r.roomID, req.User)
+		orderMsg, _ := json.Marshal(&model.ServerMessage{Type: "buzz_order", BuzzOrder: order, Timestamp: time.Now().UnixMilli()})
+		r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, orderMsg)
+
+		if first {
 			resp, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: req.User, Timestamp: time.Now().UnixMilli()})
 			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resp)
 		}
