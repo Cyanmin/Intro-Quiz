@@ -51,7 +51,6 @@ export default function RoomPage() {
           }, 1000);
         } else if (data.type === "buzz_result") {
           setWinner(data.user);
-          setQuestionActive(false);
           setPlaying(false);
           clearInterval(timerRef.current);
         } else if (data.type === "timeout") {
