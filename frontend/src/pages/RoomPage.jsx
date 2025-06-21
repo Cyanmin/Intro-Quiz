@@ -27,6 +27,7 @@ export default function RoomPage() {
   const [pauseInfo, setPauseInfo] = useState("");
   const [videoId, setVideoId] = useState("M7lc1UVf-VE");
   const [playlistInput, setPlaylistInput] = useState("");
+  const [answerText, setAnswerText] = useState("");
   const timerRef = useRef(null);
   const { connect, send } = useWebSocket(WS_URL);
 
@@ -61,6 +62,15 @@ export default function RoomPage() {
         } else if (data.type === "answer") {
           setPlaying(false);
           setPauseInfo(`${data.user}さんが解答ボタンを押しました - 再生停止中`);
+        } else if (data.type === "answer_result") {
+          if (data.correct) {
+            setQuestionActive(false);
+            setWinner(null);
+            setPauseInfo(`${data.user}さんの正解！ 正解は${data.videoTitle}`);
+          } else {
+            setPauseInfo(`${data.user}さんは不正解`);
+            setWinner(null);
+          }
         } else if (data.type === "ready_state") {
           setReadyStates(data.readyUsers);
         } else if (data.type === "buzz_order") {
@@ -92,6 +102,13 @@ export default function RoomPage() {
 
   const sendReady = () => {
     send(JSON.stringify({ type: "ready", user: name }));
+  };
+
+  const sendAnswer = () => {
+    send(
+      JSON.stringify({ type: "answer_text", user: name, answer: answerText }),
+    );
+    setAnswerText("");
   };
 
   useEffect(() => {
@@ -130,6 +147,16 @@ export default function RoomPage() {
             </div>
           )}
           {winner && <p>{winner}さんが解答権を獲得しました</p>}
+          {winner === name && (
+            <div>
+              <input
+                placeholder="回答を入力"
+                value={answerText}
+                onChange={(e) => setAnswerText(e.target.value)}
+              />
+              <button onClick={sendAnswer}>送信</button>
+            </div>
+          )}
           {buzzOrder.length > 0 && (
             <div>
               <p>押した順:</p>
