@@ -17,6 +17,8 @@ export default function RoomPage() {
   const messages = useRoomStore((state) => state.messages);
   const readyStates = useRoomStore((state) => state.readyStates);
   const setReadyStates = useRoomStore((state) => state.setReadyStates);
+  const buzzOrder = useRoomStore((state) => state.buzzOrder);
+  const setBuzzOrder = useRoomStore((state) => state.setBuzzOrder);
   const [joined, setJoined] = useState(false);
   const [name, setName] = useState("");
   const [roomId, setRoomId] = useState("");
@@ -42,13 +44,13 @@ export default function RoomPage() {
           setPauseInfo("");
           setPlaying(true);
           setTimeLeft(TIME_LIMIT);
+          setBuzzOrder([]);
           if (timerRef.current) clearInterval(timerRef.current);
           timerRef.current = setInterval(() => {
             setTimeLeft((t) => (t > 0 ? t - 1 : 0));
           }, 1000);
         } else if (data.type === "buzz_result") {
           setWinner(data.user);
-          setQuestionActive(false);
           setPlaying(false);
           clearInterval(timerRef.current);
         } else if (data.type === "timeout") {
@@ -61,6 +63,8 @@ export default function RoomPage() {
           setPauseInfo(`${data.user}さんが解答ボタンを押しました - 再生停止中`);
         } else if (data.type === "ready_state") {
           setReadyStates(data.readyUsers);
+        } else if (data.type === "buzz_order") {
+          setBuzzOrder(data.buzzOrder);
         } else if (data.type === "video") {
           setVideoId(data.videoId);
         }
@@ -126,6 +130,16 @@ export default function RoomPage() {
             </div>
           )}
           {winner && <p>{winner}さんが解答権を獲得しました</p>}
+          {buzzOrder.length > 0 && (
+            <div>
+              <p>押した順:</p>
+              <ol>
+                {buzzOrder.map((u, idx) => (
+                  <li key={idx}>{u}</li>
+                ))}
+              </ol>
+            </div>
+          )}
           <ul>
             {messages.map((msg, i) => (
               <li key={i}>{msg}</li>

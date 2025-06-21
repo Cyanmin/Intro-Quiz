@@ -14,4 +14,5 @@ type ServerMessage struct {
 	Timestamp  int64           `json:"timestamp"`
 	ReadyUsers map[string]bool `json:"readyUsers,omitempty"`
 	VideoID    string          `json:"videoId,omitempty"`
+	BuzzOrder  []string        `json:"buzzOrder,omitempty"`
 }
