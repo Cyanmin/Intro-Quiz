@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,11 +15,12 @@ import (
 
 // RoomManager manages WebSocket connections grouped by room ID.
 type RoomState struct {
-	Fastest   string
-	Active    bool
-	Ready     map[string]bool
-	Users     map[*websocket.Conn]string
-	BuzzOrder []string
+	Fastest    string
+	Active     bool
+	Ready      map[string]bool
+	Users      map[*websocket.Conn]string
+	BuzzOrder  []string
+	VideoTitle string
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
@@ -192,6 +194,64 @@ func (m *RoomManager) AddBuzz(roomID, user string) (bool, []string) {
 	return first, q
 }
 
+// SetVideoTitle stores the current video's title for answer checking.
+func (m *RoomManager) SetVideoTitle(roomID, title string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil {
+		st = &RoomState{Ready: make(map[string]bool), Users: make(map[*websocket.Conn]string)}
+		m.states[roomID] = st
+	}
+	st.VideoTitle = title
+}
+
+// GetVideoTitle retrieves the stored video title.
+func (m *RoomManager) GetVideoTitle(roomID string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	st := m.states[roomID]
+	if st == nil {
+		return ""
+	}
+	return st.VideoTitle
+}
+
+// SubmitAnswer checks the user's answer and advances to the next if incorrect.
+func (m *RoomManager) SubmitAnswer(roomID, user, answer string) (bool, string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil {
+		return false, ""
+	}
+	if strings.EqualFold(strings.TrimSpace(answer), strings.TrimSpace(st.VideoTitle)) {
+		st.Active = false
+		st.Fastest = ""
+		st.BuzzOrder = nil
+		return true, ""
+	}
+	// remove user from buzz order
+	if len(st.BuzzOrder) > 0 {
+		if st.BuzzOrder[0] == user {
+			st.BuzzOrder = st.BuzzOrder[1:]
+		} else {
+			for i, u := range st.BuzzOrder {
+				if u == user {
+					st.BuzzOrder = append(st.BuzzOrder[:i], st.BuzzOrder[i+1:]...)
+					break
+				}
+			}
+		}
+	}
+	if len(st.BuzzOrder) > 0 {
+		st.Fastest = st.BuzzOrder[0]
+		return false, st.Fastest
+	}
+	st.Fastest = ""
+	return false, ""
+}
+
 // IsActive returns whether a question is active.
 func (m *RoomManager) IsActive(roomID string) bool {
 	m.mu.RLock()
@@ -231,10 +291,11 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 	case "playlist":
 		apiKey := os.Getenv("YOUTUBE_API_KEY")
 		yt := NewYouTubeService(apiKey)
-		videoID, err := yt.GetRandomVideoID(req.PlaylistID)
+		videoID, title, err := yt.GetRandomVideo(req.PlaylistID)
 		if err != nil {
 			break
 		}
+		r.manager.SetVideoTitle(r.roomID, title)
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: videoID, Timestamp: time.Now().UnixMilli()})
 		r.conn.WriteMessage(websocket.TextMessage, resp)
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
@@ -264,6 +325,14 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		if first {
 			resp, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: req.User, Timestamp: time.Now().UnixMilli()})
 			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resp)
+		}
+	case "answer_text":
+		correct, next := r.manager.SubmitAnswer(r.roomID, req.User, req.Answer)
+		resultMsg, _ := json.Marshal(&model.ServerMessage{Type: "answer_result", User: req.User, Correct: correct, VideoTitle: r.manager.GetVideoTitle(r.roomID), Timestamp: time.Now().UnixMilli()})
+		r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resultMsg)
+		if !correct && next != "" {
+			nextMsg, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: next, Timestamp: time.Now().UnixMilli()})
+			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, nextMsg)
 		}
 	}
 
