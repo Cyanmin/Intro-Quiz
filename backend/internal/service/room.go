@@ -30,6 +30,20 @@ type RoomManager struct {
 	mu     sync.RWMutex
 }
 
+// ResetReady sets all ready states to false and returns the updated states.
+func (m *RoomManager) ResetReady(roomID string) map[string]bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil {
+		return nil
+	}
+	for u := range st.Ready {
+		st.Ready[u] = false
+	}
+	return copyReady(st.Ready)
+}
+
 // copyReady returns a copy of ready state map.
 func copyReady(src map[string]bool) map[string]bool {
 	dst := make(map[string]bool)
@@ -150,6 +164,9 @@ func (m *RoomManager) StartQuestion(roomID string) {
 			m.mu.Unlock()
 			resp, _ := json.Marshal(&model.ServerMessage{Type: "timeout", Timestamp: time.Now().UnixMilli()})
 			m.Broadcast(roomID, nil, websocket.TextMessage, resp)
+			states := m.ResetReady(roomID)
+			readyMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+			m.Broadcast(roomID, nil, websocket.TextMessage, readyMsg)
 			return
 		}
 		m.mu.Unlock()
@@ -336,6 +353,11 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		if !correct && next != "" {
 			nextMsg, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: next, Timestamp: time.Now().UnixMilli()})
 			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, nextMsg)
+		}
+		if correct || next == "" {
+			states := r.manager.ResetReady(r.roomID)
+			stateMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, stateMsg)
 		}
 	}
 
