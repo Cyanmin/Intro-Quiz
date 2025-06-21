@@ -204,7 +204,7 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 	case "playlist":
 		apiKey := os.Getenv("YOUTUBE_API_KEY")
 		yt := NewYouTubeService(apiKey)
-		videoID, err := yt.GetFirstVideoID(req.PlaylistID)
+		videoID, err := yt.GetRandomVideoID(req.PlaylistID)
 		if err != nil {
 			break
 		}

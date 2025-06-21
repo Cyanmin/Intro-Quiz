@@ -3,7 +3,9 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
+	"time"
 )
 
 // YouTubeService provides methods to interact with YouTube Data API.
@@ -68,4 +70,27 @@ func (s *YouTubeService) GetFirstVideoID(playlistID string) (string, error) {
 		return "", fmt.Errorf("no items found")
 	}
 	return data.Items[0].Snippet.ResourceID.VideoID, nil
+}
+
+// GetRandomVideoID returns a random video's ID from the given playlist.
+func (s *YouTubeService) GetRandomVideoID(playlistID string) (string, error) {
+	url := fmt.Sprintf("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=%s&key=%s", playlistID, s.APIKey)
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("youtube api status: %s", resp.Status)
+	}
+	var data playlistItemsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return "", err
+	}
+	if len(data.Items) == 0 {
+		return "", fmt.Errorf("no items found")
+	}
+	rand.Seed(time.Now().UnixNano())
+	idx := rand.Intn(len(data.Items))
+	return data.Items[idx].Snippet.ResourceID.VideoID, nil
 }
