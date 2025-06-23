@@ -38,6 +38,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/youtube/embeddable/{videoId}": {
+            "get": {
+                "description": "Verify the embeddable status of a YouTube video.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "youtube"
+                ],
+                "summary": "Check if video is embeddable",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "YouTube video ID",
+                        "name": "videoId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/youtube/test": {
             "get": {
                 "description": "Retrieve the first video's title from a fixed YouTube playlist.",

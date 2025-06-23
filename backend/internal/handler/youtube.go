@@ -26,3 +26,27 @@ func YouTubeTestHandler(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "title": title})
 }
+
+// CheckEmbeddableHandler reports whether a video can be embedded.
+// @Summary      Check if video is embeddable
+// @Description  Verify the embeddable status of a YouTube video.
+// @Tags         youtube
+// @Produce      json
+// @Param        videoId   path      string  true  "YouTube video ID"
+// @Success      200 {object} map[string]bool
+// @Failure      400 {object} map[string]string
+// @Failure      500 {object} map[string]string
+// @Router       /api/youtube/embeddable/{videoId} [get]
+func CheckEmbeddableHandler(c *gin.Context) {
+       videoID := c.Param("videoId")
+       if videoID == "" {
+               c.JSON(http.StatusBadRequest, gin.H{"error": "videoId required"})
+               return
+       }
+       ok, err := service.CheckEmbeddable(videoID)
+       if err != nil {
+               c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": err.Error()})
+               return
+       }
+       c.JSON(http.StatusOK, gin.H{"embeddable": ok})
+}
