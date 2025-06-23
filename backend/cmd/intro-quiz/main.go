@@ -22,9 +22,10 @@ func main() {
 
 	docs.SwaggerInfo.BasePath = "/"
 
-	router.GET("/ws", handler.WSHandler)
-	router.GET("/api/youtube/test", handler.YouTubeTestHandler)
-	router.GET("/api/hello", handler.HelloHandler)
+       router.GET("/ws", handler.WSHandler)
+       router.GET("/api/youtube/test", handler.YouTubeTestHandler)
+       router.GET("/api/youtube/embeddable/:videoId", handler.CheckEmbeddableHandler)
+       router.GET("/api/hello", handler.HelloHandler)
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	log.Println("Listening on :8080")

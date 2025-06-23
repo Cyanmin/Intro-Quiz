@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -94,4 +95,35 @@ func (s *YouTubeService) GetRandomVideo(playlistID string) (string, string, erro
 	idx := rand.Intn(len(data.Items))
 	item := data.Items[idx].Snippet
 	return item.ResourceID.VideoID, item.Title, nil
+}
+
+// CheckEmbeddable verifies whether the specified video can be embedded.
+func CheckEmbeddable(videoID string) (bool, error) {
+	apiKey := os.Getenv("YOUTUBE_API_KEY")
+	if apiKey == "" {
+		return false, fmt.Errorf("YOUTUBE_API_KEY not set")
+	}
+	url := fmt.Sprintf("https://www.googleapis.com/youtube/v3/videos?part=status&id=%s&key=%s", videoID, apiKey)
+	resp, err := http.Get(url)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("youtube api status: %s", resp.Status)
+	}
+	var result struct {
+		Items []struct {
+			Status struct {
+				Embeddable bool `json:"embeddable"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, err
+	}
+	if len(result.Items) == 0 {
+		return false, fmt.Errorf("no items found")
+	}
+	return result.Items[0].Status.Embeddable, nil
 }
