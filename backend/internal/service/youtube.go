@@ -92,9 +92,18 @@ func (s *YouTubeService) GetRandomVideo(playlistID string) (string, string, erro
 		return "", "", fmt.Errorf("no items found")
 	}
 	rand.Seed(time.Now().UnixNano())
-	idx := rand.Intn(len(data.Items))
-	item := data.Items[idx].Snippet
-	return item.ResourceID.VideoID, item.Title, nil
+	indices := rand.Perm(len(data.Items))
+	for _, idx := range indices {
+		item := data.Items[idx].Snippet
+		embeddable, err := CheckEmbeddable(item.ResourceID.VideoID)
+		if err != nil {
+			continue
+		}
+		if embeddable {
+			return item.ResourceID.VideoID, item.Title, nil
+		}
+	}
+	return "", "", fmt.Errorf("no embeddable videos found")
 }
 
 // CheckEmbeddable verifies whether the specified video can be embedded.
