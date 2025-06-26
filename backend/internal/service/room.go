@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -16,13 +17,14 @@ import (
 
 // RoomManager manages WebSocket connections grouped by room ID.
 type RoomState struct {
-	Fastest    string
-	Active     bool
-	Ready      map[string]bool
-	Users      map[*websocket.Conn]string
-	BuzzOrder  []string
-	VideoTitle string
-	PlaylistID string
+	Fastest         string
+	Active          bool
+	Ready           map[string]bool
+	Users           map[*websocket.Conn]string
+	BuzzOrder       []string
+	VideoTitle      string
+	PlaylistID      string
+	RemainingVideos []VideoItem
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
@@ -230,7 +232,7 @@ func (m *RoomManager) SetVideoTitle(roomID, title string) {
 }
 
 // SetPlaylist stores the playlist ID for the room.
-func (m *RoomManager) SetPlaylist(roomID, playlistID string) {
+func (m *RoomManager) SetPlaylist(roomID, playlistID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	st := m.states[roomID]
@@ -239,6 +241,14 @@ func (m *RoomManager) SetPlaylist(roomID, playlistID string) {
 		m.states[roomID] = st
 	}
 	st.PlaylistID = playlistID
+	apiKey := os.Getenv("YOUTUBE_API_KEY")
+	yt := NewYouTubeService(apiKey)
+	videos, err := yt.ListPlaylistVideos(playlistID)
+	if err != nil {
+		return err
+	}
+	st.RemainingVideos = videos
+	return nil
 }
 
 // GetVideoTitle retrieves the stored video title.
@@ -254,23 +264,37 @@ func (m *RoomManager) GetVideoTitle(roomID string) string {
 
 // NextVideo retrieves a random video using the stored playlist ID.
 func (m *RoomManager) NextVideo(roomID string) (string, error) {
-	m.mu.RLock()
-	playlist := ""
-	if st, ok := m.states[roomID]; ok {
-		playlist = st.PlaylistID
-	}
-	m.mu.RUnlock()
-	if playlist == "" {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.states[roomID]
+	if st == nil || st.PlaylistID == "" {
 		return "", fmt.Errorf("playlist not set")
 	}
-	apiKey := os.Getenv("YOUTUBE_API_KEY")
-	yt := NewYouTubeService(apiKey)
-	videoID, title, err := yt.GetRandomVideo(playlist)
-	if err != nil {
-		return "", err
+	if len(st.RemainingVideos) == 0 {
+		apiKey := os.Getenv("YOUTUBE_API_KEY")
+		yt := NewYouTubeService(apiKey)
+		vids, err := yt.ListPlaylistVideos(st.PlaylistID)
+		if err != nil {
+			return "", err
+		}
+		st.RemainingVideos = vids
 	}
-	m.SetVideoTitle(roomID, title)
-	return videoID, nil
+	if len(st.RemainingVideos) == 0 {
+		return "", fmt.Errorf("no videos available")
+	}
+	rand.Seed(time.Now().UnixNano())
+	for len(st.RemainingVideos) > 0 {
+		idx := rand.Intn(len(st.RemainingVideos))
+		item := st.RemainingVideos[idx]
+		st.RemainingVideos = append(st.RemainingVideos[:idx], st.RemainingVideos[idx+1:]...)
+		emb, err := CheckEmbeddable(item.ID)
+		if err != nil || !emb {
+			continue
+		}
+		st.VideoTitle = item.Title
+		return item.ID, nil
+	}
+	return "", fmt.Errorf("no embeddable videos found")
 }
 
 // SubmitAnswer checks the user's answer and advances to the next if incorrect.
@@ -348,7 +372,9 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		r.conn.WriteMessage(websocket.TextMessage, resp)
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
 	case "playlist":
-		r.manager.SetPlaylist(r.roomID, req.PlaylistID)
+		if err := r.manager.SetPlaylist(r.roomID, req.PlaylistID); err != nil {
+			break
+		}
 		videoID, err := r.manager.NextVideo(r.roomID)
 		if err != nil {
 			break
