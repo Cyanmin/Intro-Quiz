@@ -21,11 +21,13 @@ type RoomState struct {
 	Active          bool
 	Ready           map[string]bool
 	Users           map[*websocket.Conn]string
-	BuzzOrder       []string
+	AnswerRights    map[string]bool
 	VideoTitle      string
 	PlaylistID      string
 	RemainingVideos []VideoItem
 	TimeoutCancel   chan struct{}
+	TimeLeft        time.Duration
+	TimerStarted    time.Time
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
@@ -152,84 +154,97 @@ func (m *RoomManager) StartQuestion(roomID string) {
 	m.mu.Lock()
 	st, ok := m.states[roomID]
 	if !ok {
-		st = &RoomState{}
+		st = &RoomState{Ready: make(map[string]bool), Users: make(map[*websocket.Conn]string)}
 		m.states[roomID] = st
 	}
-	// 既存タイマーがあればキャンセル
 	if st.TimeoutCancel != nil {
 		close(st.TimeoutCancel)
 		st.TimeoutCancel = nil
 	}
-	st.TimeoutCancel = make(chan struct{})
 	st.Active = true
 	st.Fastest = ""
-	st.BuzzOrder = nil
+	st.AnswerRights = make(map[string]bool)
+	for _, name := range st.Users {
+		st.AnswerRights[name] = true
+	}
+	st.TimeLeft = time.Duration(config.TimeLimit) * time.Second
+	st.TimerStarted = time.Now()
+	st.TimeoutCancel = make(chan struct{})
 	cancel := st.TimeoutCancel
 	m.mu.Unlock()
 
-	go func() {
-		select {
-		case <-time.After(time.Duration(config.TimeLimit) * time.Second):
-			m.mu.Lock()
-			st := m.states[roomID]
-			if st != nil && st.Active && st.Fastest == "" {
-				st.Active = false
-				m.mu.Unlock()
-				resp, _ := json.Marshal(&model.ServerMessage{Type: "timeout", Timestamp: time.Now().UnixMilli()})
-				m.Broadcast(roomID, nil, websocket.TextMessage, resp)
-				states := m.ResetReady(roomID)
-				readyMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
-				m.Broadcast(roomID, nil, websocket.TextMessage, readyMsg)
-				if vid, err := m.NextVideo(roomID); err == nil {
-					videoMsg, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: vid, Timestamp: time.Now().UnixMilli()})
-					m.Broadcast(roomID, nil, websocket.TextMessage, videoMsg)
-				}
-				return
-			}
-			m.mu.Unlock()
-		case <-cancel:
-			// タイマーキャンセル
-			return
-		}
-	}()
+	go m.runTimer(roomID, cancel)
 }
 
-// SetFastest records the fastest user if not already set.
-func (m *RoomManager) SetFastest(roomID, user string) bool {
+// runTimer handles the countdown for a question.
+func (m *RoomManager) runTimer(roomID string, cancel chan struct{}) {
+	m.mu.RLock()
+	st := m.states[roomID]
+	duration := st.TimeLeft
+	m.mu.RUnlock()
+	timer := time.NewTimer(duration)
+	start := time.Now()
+	select {
+	case <-timer.C:
+		m.mu.Lock()
+		st := m.states[roomID]
+		if st != nil && st.Active && st.Fastest == "" {
+			st.Active = false
+			for k := range st.AnswerRights {
+				st.AnswerRights[k] = false
+			}
+			m.mu.Unlock()
+			resp, _ := json.Marshal(&model.ServerMessage{Type: "timeout", Timestamp: time.Now().UnixMilli()})
+			m.Broadcast(roomID, nil, websocket.TextMessage, resp)
+			m.advanceQuestion(roomID)
+			return
+		}
+		m.mu.Unlock()
+	case <-cancel:
+		if !timer.Stop() {
+			<-timer.C
+		}
+		m.mu.Lock()
+		if st := m.states[roomID]; st != nil {
+			st.TimeLeft -= time.Since(start)
+		}
+		m.mu.Unlock()
+	}
+}
+
+// resumeTimer restarts the countdown with remaining time.
+func (m *RoomManager) resumeTimer(roomID string) {
+	m.mu.Lock()
+	st := m.states[roomID]
+	if st == nil || st.TimeLeft <= 0 {
+		m.mu.Unlock()
+		return
+	}
+	st.Active = true
+	st.TimerStarted = time.Now()
+	st.TimeoutCancel = make(chan struct{})
+	cancel := st.TimeoutCancel
+	m.mu.Unlock()
+	go m.runTimer(roomID, cancel)
+}
+
+// AddBuzz registers a user's intent to answer.
+// It returns true if the user successfully obtained the answer right.
+func (m *RoomManager) AddBuzz(roomID, user string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	st := m.states[roomID]
-	if st == nil || !st.Active || st.Fastest != "" {
+	if st == nil || !st.Active || st.Fastest != "" || !st.AnswerRights[user] {
 		return false
 	}
 	st.Fastest = user
 	st.Active = false
+	if st.TimeoutCancel != nil {
+		close(st.TimeoutCancel)
+		st.TimeoutCancel = nil
+		st.TimeLeft -= time.Since(st.TimerStarted)
+	}
 	return true
-}
-
-// AddBuzz appends a user to the buzz order and returns if they were first and the current order.
-func (m *RoomManager) AddBuzz(roomID, user string) (bool, []string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	st := m.states[roomID]
-	if st == nil {
-		return false, nil
-	}
-	for _, u := range st.BuzzOrder {
-		if u == user {
-			q := append([]string(nil), st.BuzzOrder...)
-			return false, q
-		}
-	}
-	st.BuzzOrder = append(st.BuzzOrder, user)
-	first := false
-	if st.Active && st.Fastest == "" {
-		st.Fastest = user
-		st.Active = false
-		first = true
-	}
-	q := append([]string(nil), st.BuzzOrder...)
-	return first, q
 }
 
 // SetVideoTitle stores the current video's title for answer checking.
@@ -310,42 +325,52 @@ func (m *RoomManager) NextVideo(roomID string) (string, error) {
 	return "", fmt.Errorf("no embeddable videos found")
 }
 
-// SubmitAnswer checks the user's answer and advances to the next if incorrect.
-func (m *RoomManager) SubmitAnswer(roomID, user, answer string) (bool, string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	st := m.states[roomID]
-	if st == nil {
-		return false, ""
+// advanceQuestion moves the room to the next quiz item immediately.
+func (m *RoomManager) advanceQuestion(roomID string) {
+	vid, err := m.NextVideo(roomID)
+	if err != nil {
+		return
 	}
-	// 正解判定を「タイトルに含まれていれば正解」に変更
+	videoMsg, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: vid, Timestamp: time.Now().UnixMilli()})
+	m.Broadcast(roomID, nil, websocket.TextMessage, videoMsg)
+	m.StartQuestion(roomID)
+	startMsg, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})
+	m.Broadcast(roomID, nil, websocket.TextMessage, startMsg)
+}
+
+// SubmitAnswer checks the user's answer and advances to the next if incorrect.
+func (m *RoomManager) SubmitAnswer(roomID, user, answer string) (bool, bool) {
+	m.mu.Lock()
+	st := m.states[roomID]
+	if st == nil || st.Fastest != user {
+		m.mu.Unlock()
+		return false, false
+	}
 	title := strings.ToLower(strings.TrimSpace(st.VideoTitle))
 	ans := strings.ToLower(strings.TrimSpace(answer))
 	if title != "" && ans != "" && strings.Contains(title, ans) {
 		st.Active = false
 		st.Fastest = ""
-		st.BuzzOrder = nil
-		return true, ""
+		for k := range st.AnswerRights {
+			st.AnswerRights[k] = false
+		}
+		m.mu.Unlock()
+		return true, false
 	}
-	// remove user from buzz order
-	if len(st.BuzzOrder) > 0 {
-		if st.BuzzOrder[0] == user {
-			st.BuzzOrder = st.BuzzOrder[1:]
-		} else {
-			for i, u := range st.BuzzOrder {
-				if u == user {
-					st.BuzzOrder = append(st.BuzzOrder[:i], st.BuzzOrder[i+1:]...)
-					break
-				}
-			}
+	st.AnswerRights[user] = false
+	st.Fastest = ""
+	remaining := false
+	for _, v := range st.AnswerRights {
+		if v {
+			remaining = true
+			break
 		}
 	}
-	if len(st.BuzzOrder) > 0 {
-		st.Fastest = st.BuzzOrder[0]
-		return false, st.Fastest
+	m.mu.Unlock()
+	if remaining {
+		m.resumeTimer(roomID)
 	}
-	st.Fastest = ""
-	return false, ""
+	return false, remaining
 }
 
 // IsActive returns whether a question is active.
@@ -410,34 +435,24 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})
 		r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resp)
 	case "buzz":
-		// broadcast that someone pressed the answer button
 		note, _ := json.Marshal(&model.ServerMessage{Type: "answer", User: req.User, Timestamp: time.Now().UnixMilli()})
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, note)
 
-		first, order := r.manager.AddBuzz(r.roomID, req.User)
-		orderMsg, _ := json.Marshal(&model.ServerMessage{Type: "buzz_order", BuzzOrder: order, Timestamp: time.Now().UnixMilli()})
-		r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, orderMsg)
-
-		if first {
+		if r.manager.AddBuzz(r.roomID, req.User) {
 			resp, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: req.User, Timestamp: time.Now().UnixMilli()})
 			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resp)
 		}
 	case "answer_text":
-		correct, next := r.manager.SubmitAnswer(r.roomID, req.User, req.Answer)
+		correct, remain := r.manager.SubmitAnswer(r.roomID, req.User, req.Answer)
 		resultMsg, _ := json.Marshal(&model.ServerMessage{Type: "answer_result", User: req.User, Correct: correct, VideoTitle: r.manager.GetVideoTitle(r.roomID), Timestamp: time.Now().UnixMilli()})
 		r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resultMsg)
-		if !correct && next != "" {
-			nextMsg, _ := json.Marshal(&model.ServerMessage{Type: "buzz_result", User: next, Timestamp: time.Now().UnixMilli()})
-			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, nextMsg)
-		}
-		if correct || next == "" {
-			states := r.manager.ResetReady(r.roomID)
-			stateMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
-			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, stateMsg)
-			if vid, err := r.manager.NextVideo(r.roomID); err == nil {
-				videoMsg, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: vid, Timestamp: time.Now().UnixMilli()})
-				r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, videoMsg)
-			}
+		if correct {
+			r.manager.advanceQuestion(r.roomID)
+		} else if remain {
+			resumeMsg, _ := json.Marshal(&model.ServerMessage{Type: "resume", Timestamp: time.Now().UnixMilli()})
+			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resumeMsg)
+		} else {
+			r.manager.advanceQuestion(r.roomID)
 		}
 	}
 
