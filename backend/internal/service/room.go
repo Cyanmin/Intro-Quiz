@@ -295,7 +295,7 @@ func (m *RoomManager) NextVideo(roomID string) (string, error) {
 	if len(st.RemainingVideos) == 0 {
 		return "", fmt.Errorf("no videos available")
 	}
-	rand.Seed(time.Now().UnixNano())
+	// Go 1.20以降はrand.Seedでの初期化は不要です
 	for len(st.RemainingVideos) > 0 {
 		idx := rand.Intn(len(st.RemainingVideos))
 		item := st.RemainingVideos[idx]

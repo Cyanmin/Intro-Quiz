@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"time"
 )
 
 // YouTubeService provides methods to interact with YouTube Data API.
@@ -127,7 +126,7 @@ func (s *YouTubeService) GetRandomVideo(playlistID string) (string, string, erro
 	if len(data.Items) == 0 {
 		return "", "", fmt.Errorf("no items found")
 	}
-	rand.Seed(time.Now().UnixNano())
+	// Go 1.20以降はrand.Seedでの初期化は不要です
 	indices := rand.Perm(len(data.Items))
 	for _, idx := range indices {
 		item := data.Items[idx].Snippet
