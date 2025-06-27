@@ -60,6 +60,22 @@ func copyReady(src map[string]bool) map[string]bool {
 	return dst
 }
 
+// AllReady checks if every registered user is ready.
+func (m *RoomManager) AllReady(roomID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	st := m.states[roomID]
+	if st == nil || len(st.Ready) == 0 {
+		return false
+	}
+	for _, v := range st.Ready {
+		if !v {
+			return false
+		}
+	}
+	return true
+}
+
 // NewRoomManager creates a new RoomManager.
 func NewRoomManager() *RoomManager {
 	return &RoomManager{
@@ -430,6 +446,11 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: videoID, Timestamp: time.Now().UnixMilli()})
 		r.conn.WriteMessage(websocket.TextMessage, resp)
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
+		if r.manager.AllReady(r.roomID) {
+			r.manager.StartQuestion(r.roomID)
+			startMsg, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})
+			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, startMsg)
+		}
 	case "ready":
 		all, states := r.manager.SetReady(r.roomID, req.User)
 		resp, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
