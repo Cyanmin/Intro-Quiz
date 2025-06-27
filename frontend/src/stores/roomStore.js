@@ -10,6 +10,4 @@ export const useRoomStore = create((set) => ({
   setWinner: (name) => set({ winner: name }),
   readyStates: {},
   setReadyStates: (states) => set({ readyStates: states }),
-  buzzOrder: [],
-  setBuzzOrder: (order) => set({ buzzOrder: order }),
 }));
