@@ -196,7 +196,7 @@ func (m *RoomManager) runTimer(roomID string, cancel chan struct{}) {
 			m.mu.Unlock()
 			resp, _ := json.Marshal(&model.ServerMessage{Type: "timeout", Timestamp: time.Now().UnixMilli()})
 			m.Broadcast(roomID, nil, websocket.TextMessage, resp)
-			m.advanceQuestion(roomID)
+			m.prepareNext(roomID)
 			return
 		}
 		m.mu.Unlock()
@@ -338,6 +338,13 @@ func (m *RoomManager) advanceQuestion(roomID string) {
 	m.Broadcast(roomID, nil, websocket.TextMessage, startMsg)
 }
 
+// prepareNext resets ready states and notifies users.
+func (m *RoomManager) prepareNext(roomID string) {
+	states := m.ResetReady(roomID)
+	readyMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+	m.Broadcast(roomID, nil, websocket.TextMessage, readyMsg)
+}
+
 // SubmitAnswer checks the user's answer and advances to the next if incorrect.
 func (m *RoomManager) SubmitAnswer(roomID, user, answer string) (bool, bool) {
 	m.mu.Lock()
@@ -355,6 +362,7 @@ func (m *RoomManager) SubmitAnswer(roomID, user, answer string) (bool, bool) {
 			st.AnswerRights[k] = false
 		}
 		m.mu.Unlock()
+		m.prepareNext(roomID)
 		return true, false
 	}
 	st.AnswerRights[user] = false
@@ -369,6 +377,8 @@ func (m *RoomManager) SubmitAnswer(roomID, user, answer string) (bool, bool) {
 	m.mu.Unlock()
 	if remaining {
 		m.resumeTimer(roomID)
+	} else {
+		m.prepareNext(roomID)
 	}
 	return false, remaining
 }
@@ -426,9 +436,7 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		r.conn.WriteMessage(websocket.TextMessage, resp)
 		r.manager.Broadcast(r.roomID, r.conn, websocket.TextMessage, resp)
 		if all {
-			r.manager.StartQuestion(r.roomID)
-			startMsg, _ := json.Marshal(&model.ServerMessage{Type: "start", Timestamp: time.Now().UnixMilli()})
-			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, startMsg)
+			r.manager.advanceQuestion(r.roomID)
 		}
 	case "start":
 		r.manager.StartQuestion(r.roomID)
@@ -446,13 +454,9 @@ func (r *RoomService) ProcessMessage(mt int, msg []byte) (int, []byte) {
 		correct, remain := r.manager.SubmitAnswer(r.roomID, req.User, req.Answer)
 		resultMsg, _ := json.Marshal(&model.ServerMessage{Type: "answer_result", User: req.User, Correct: correct, VideoTitle: r.manager.GetVideoTitle(r.roomID), Timestamp: time.Now().UnixMilli()})
 		r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resultMsg)
-		if correct {
-			r.manager.advanceQuestion(r.roomID)
-		} else if remain {
+		if remain {
 			resumeMsg, _ := json.Marshal(&model.ServerMessage{Type: "resume", Timestamp: time.Now().UnixMilli()})
 			r.manager.Broadcast(r.roomID, nil, websocket.TextMessage, resumeMsg)
-		} else {
-			r.manager.advanceQuestion(r.roomID)
 		}
 	}
 
