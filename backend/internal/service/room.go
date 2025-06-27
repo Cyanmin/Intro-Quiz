@@ -25,6 +25,7 @@ type RoomState struct {
 	VideoTitle      string
 	PlaylistID      string
 	RemainingVideos []VideoItem
+	TimeoutCancel   chan struct{}
 }
 
 // RoomManager manages WebSocket connections grouped by room ID and quiz state.
@@ -154,30 +155,42 @@ func (m *RoomManager) StartQuestion(roomID string) {
 		st = &RoomState{}
 		m.states[roomID] = st
 	}
+	// 既存タイマーがあればキャンセル
+	if st.TimeoutCancel != nil {
+		close(st.TimeoutCancel)
+		st.TimeoutCancel = nil
+	}
+	st.TimeoutCancel = make(chan struct{})
 	st.Active = true
 	st.Fastest = ""
 	st.BuzzOrder = nil
+	cancel := st.TimeoutCancel
 	m.mu.Unlock()
 
 	go func() {
-		time.Sleep(time.Duration(config.TimeLimit) * time.Second)
-		m.mu.Lock()
-		st := m.states[roomID]
-		if st != nil && st.Active && st.Fastest == "" {
-			st.Active = false
-			m.mu.Unlock()
-			resp, _ := json.Marshal(&model.ServerMessage{Type: "timeout", Timestamp: time.Now().UnixMilli()})
-			m.Broadcast(roomID, nil, websocket.TextMessage, resp)
-			states := m.ResetReady(roomID)
-			readyMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
-			m.Broadcast(roomID, nil, websocket.TextMessage, readyMsg)
-			if vid, err := m.NextVideo(roomID); err == nil {
-				videoMsg, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: vid, Timestamp: time.Now().UnixMilli()})
-				m.Broadcast(roomID, nil, websocket.TextMessage, videoMsg)
+		select {
+		case <-time.After(time.Duration(config.TimeLimit) * time.Second):
+			m.mu.Lock()
+			st := m.states[roomID]
+			if st != nil && st.Active && st.Fastest == "" {
+				st.Active = false
+				m.mu.Unlock()
+				resp, _ := json.Marshal(&model.ServerMessage{Type: "timeout", Timestamp: time.Now().UnixMilli()})
+				m.Broadcast(roomID, nil, websocket.TextMessage, resp)
+				states := m.ResetReady(roomID)
+				readyMsg, _ := json.Marshal(&model.ServerMessage{Type: "ready_state", ReadyUsers: states, Timestamp: time.Now().UnixMilli()})
+				m.Broadcast(roomID, nil, websocket.TextMessage, readyMsg)
+				if vid, err := m.NextVideo(roomID); err == nil {
+					videoMsg, _ := json.Marshal(&model.ServerMessage{Type: "video", VideoID: vid, Timestamp: time.Now().UnixMilli()})
+					m.Broadcast(roomID, nil, websocket.TextMessage, videoMsg)
+				}
+				return
 			}
+			m.mu.Unlock()
+		case <-cancel:
+			// タイマーキャンセル
 			return
 		}
-		m.mu.Unlock()
 	}()
 }
 
